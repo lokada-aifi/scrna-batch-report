@@ -1,3 +1,7 @@
 .Rhistory
 .RData
 .Rproj.user
+scrna-batch-report.Rproj
+.DS_Store
+test_data/
+inst/

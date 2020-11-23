@@ -42,7 +42,7 @@ params:
     
 ```
 
-
+<!-- Set Up -->
 ```{r setup, echo = FALSE, include = TRUE}
 # Load Libraries  
 start_time <- Sys.time()
@@ -63,17 +63,43 @@ quiet_library(gt)  # formatted table output
 quiet_library(plotly)  
 quiet_library(immutils)
 quiet_library(tidyr)
+quiet_library(Seurat)
 
+```
+
+<!-- Argument parsing -->
+```{r Parse arguments}
+if(is.null(params$in_dir)) {
+  in_dir <- system.file("testdata", package = "scrna-batch-summary")
+  out_h5 <- tempfile(fileext = ".h5")
+  out_tbl <- tempfile(fileext = ".csv.gz")
+  allow_few_cells <- FALSE
+} else {
+  in_h5 <- params$in_h5
+  out_h5 <- params$out_h5
+  out_tbl <- params$out_tbl
+  allow_few_cells <- as.logical(params$allow_few_cells)
+  
+  if(is.null(out_tbl)) {
+    out_tbl <- "Not Used"
+  }
+}
+
+stm(paste0("IN  H5 file         : ", in_h5))
+stm(paste0("OUT H5 file         : ", out_h5))
+stm(paste0("OUT Cell Label Table: ", out_tbl))
 ```
 
 ```{r input_todelete}
 # Delete this section after defining param structure
 # in_dir <- "~/rnaseq_qc_report/test_data/B002/rna/B002-P1/labeled_h5/"
-in_dir <- "Projects/Exploration/B002/rna/"
-in_dir2 <- "Projects/Exploration/B002/rna/hto"
+in_dir <- "~/Projects/Exploration/B002/rna/"
+in_dir2 <- "~/Projects/Exploration/B002/rna/hto"
 out_dir <- ""
 
 ```
+
+
 
 ```{r functions}
 # NEEDS UPDATE CLOSER TO FINALIZATINO BASED ON LOCATIONS OF FUNCTIONS AND POTENTIALLY UPDATED PACKAGES
@@ -432,17 +458,24 @@ qc_aligned_barplot_mod <- function (meta, category_x = "batch_id",
 ```
 
 ```{r parse_input}
+
 # Get list of all labeled h5 files
 all_files <- list.files(path = in_dir, pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
-all_hto_json <- list.files(path = in_dir2, pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
-all_split_json <- list.files(path = in_dir2, pattern = "split_h5_metrics.json$", full.names = TRUE, recursive = TRUE)
-all_multiplet <- list.files(path = in_dir2, pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
+all_hto_json <- list.files(path = in_dir, pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
+all_split_json <- list.files(path = in_dir, pattern = "split_h5_metrics.json$", full.names = TRUE, recursive = TRUE)
+all_multiplet <- list.files(path = in_dir, pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
+
+
+stm(paste0("IN Directory        : ", in_dir))
+stm(paste0("IN Labeled H5 Files :\n\t", paste(all_files, collapse = "\n\t")))
+
 
 ```
 
 
 ```{r merge_meta}
 # Merge Metadata
+stm("Reading in labeled h5 file meta data")
 meta_list <- lapply(all_files, read_h5_cell_meta)
 meta <- do.call(rbind, meta_list)
 setDT(meta)
@@ -451,6 +484,7 @@ remove("meta_list")
 
 ```{r merge_well}
 # Merge Well Data
+stm("Reading in labeled h5 file well data")
 well_list <- lapply(all_files, read_h5_well_meta)
 well_info <- unique(do.call(rbind, well_list))
 setDT(well_info)
@@ -459,6 +493,7 @@ remove("well_list")
 ```  
 
 ```{r read_json}
+# Read in json files
 stm("Reading in hto processing metrics json files")
 well_hto_json_list <- lapply(all_hto_json,read_hto_well_json)
 well_hto_json_df <- do.call(rbind, well_hto_json_list)
@@ -472,6 +507,7 @@ remove("well_hto_json_list")
 ```
 
 ```{r read_multiplet}
+stm("Reading in multiplet h5 file meta data")
 multiplet_meta_list <- lapply(all_multiplet, read_h5_cell_meta)
 multiplet_meta <- do.call(rbind, multiplet_meta_list)
 setDT(multiplet_meta)
@@ -949,22 +985,177 @@ plot_grid(plotlist = genes_violin_list,
 
 ``` 
   
-  [Return to Top](#top_cell_hashing)  
+[Return to Top](#top_cell_hashing)  
     
 ### Cell Labeling  
+
+<a id="top_cell_labeling"></a> 
+
 ```{r cell_labeling_summary}
 dummy_table %>% 
   gt() %>% 
   gt_fmt_comments()
 
 
-```
+```  
 
 #### UMAP  
-Sample UMAP colored by cell type, 
+```{r combine count matrices for all samples}
+stm("Reading and merging all count matrices")
 
-<div class="superbigimage">
-```{r umap_test, fig.height = 4, fig.width = 28, results = "asis"}
+# Merge the count matrices for all samples into 1 table
+all_counts_list <- lapply(all_files[1:5], H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
+all_counts_mat <- do.call(cbind, all_counts_list)
+all_counts_cells_bc <- meta$original_barcodes
+
+featDF <- read_h5_feature_meta(all_files[1])
+
+```  
+
+```{r combined_umap}
+stm("Creating Seurat object from merged data")
+# Create Seurat object
+merged_so <- Seurat::CreateSeuratObject(counts = all_counts_mat)
+
+stm("Normalizing data")
+# Normalize data
+merged_so <- Seurat::NormalizeData(object = merged_so, 
+                                   normalization.method = "LogNormalize",
+                                   scale.factor = 10000,
+                                   margin = 1)
+
+normCounts <- merged_so[["RNA"]]@data
+
+```
+
+```{r}
+# library(SeuratLabeler)
+# reference_so <- variable_pbmc_10k_v3
+# transfer_anchors <- FindTransferAnchors(reference = reference_so,
+#                                         query = merged_so,
+#                                         normalization.method = "LogNormalize",
+#                                         features = VariableFeatures(object = reference_so),
+#                                         reduction = "pcaproject")
+
+
+```  
+
+
+```{r PCA}
+stm("Running PCA")
+pc_dims <- min(ncol(merged_so) - 1, 50)
+
+merged_so <- FindVariableFeatures(object = merged_so)
+merged_so <- ScaleData(object = merged_so)
+merged_so <- RunPCA(object = merged_so, npcs = pc_dims)  
+
+```  
+
+
+```{r jackstraw_pc_selection }
+
+# Jackstraw Method
+sample_cells <- function(cl,
+                          sample.size,
+                          seed = 3030) {
+  cl.cells <- split(names(cl), cl)
+  sampled.cells <- sapply(names(cl.cells), function(x) {
+    cells <- cl.cells[[x]]
+    if (sample.size >= length(cells)) {
+      return(cells)
+    }
+    to.sample <- pmin(sample.size, length(cells))
+
+    set.seed(seed)
+    sample(cells, to.sample)
+  }, simplify = FALSE)
+  sampled.cells <- unlist(sampled.cells)
+  return(sampled.cells)
+}
+
+submerged <- meta %>%
+  filter(barcodes %in% rownames(merged_so[["RNA"]]@meta.features))
+predicted <- submerged$seurat_pbmc_type
+names(predicted) <- submerged$barcodes
+jackstraw_cells <- sample_cells(predicted, 100)
+jackstraw_so <- merged_so[,jackstraw_cells]
+
+jackstraw_so <- JackStraw(object = jackstraw_so,
+                          dims = pc_dims,
+                          num.replicate = 50,
+                          verbose = FALSE)
+jackstraw_so <- ScoreJackStraw(object = jackstraw_so,
+                               dims = 1:pc_dims)
+
+pc_pvals <- jackstraw_so@reductions$pca@jackstraw$overall.p.values[,2]
+good_pcs <- pc_pvals < 0.05
+
+pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+```
+
+
+```{r elbowplot_pc_selection}
+stm("Determining dimensionality via elbow plot method")
+
+# Elbow Method
+pcElbow <- Seurat::ElbowPlot(object = merged_so,reduction = "pca")
+
+# Find inflection point of the elbow curve
+inflectionPoint <- inflection::ede(x = pcElbow$data$dims,
+                                   y = pcElbow$data$stdev,
+                                   index = 1)[, "j2"]
+pc_var <- (merged_so@reductions$pca@stdev)^2
+cumvar <- cumsum(pc_var/sum(pc_var))
+p_elbow <- pcElbow +
+  geom_vline(xintercept = inflectionPoint, col = "red") +
+  geom_text(x = inflectionPoint, col = "red", y = Inf,
+            label = sprintf("PC%s: Cum.Prop. Variance = %0.3f", inflectionPoint, round(cumvar[inflectionPoint],3)), 
+            check_overlap = T, hjust = -0.1, vjust = 1) +
+  ggtitle(sprintf("PC Elbow Plot"))
+plot(p_elbow)
+
+pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+```
+
+
+```{r merged_umap}
+
+# Run UMAP
+stm("Running UMAP on selected coordinates...")
+## As the number of dimensions, use the same PCs as input to the clustering analysis
+umap_results <- uwot::umap(pc_embeddings[, 1:inflectionPoint],
+                           min_dist = 0.1)
+
+merged_so_elbow <- Seurat::RunUMAP(merged_so,
+                                   dims = 1:inflectionPoint,
+                                   # umap.method = "umap-learn",
+                                   umap.method = "uwot",
+                                   seed.use = 3,
+                                   verbose = TRUE)
+
+
+
+# Get UMAP coordinates
+umapDF <- merged_so_elbow[["umap"]]@cell.embeddings %>%
+          as.data.frame() %>%
+          dplyr::rename(UMAP_1_merged = UMAP_1, UMAP_2_merged = UMAP_2) %>% 
+          tibble::rownames_to_column(var = "barcodes")
+# umapDF <- merge(umapDF, merged_so_elbow@"meta.data", by = "barcodes")
+umapDF <- merge(umapDF, meta, by = "barcodes")
+rownames(umapDF) <- umapDF$barcodes
+umapDF <- umapDF[rownames(merged_so_elbow@"meta.data"), , drop = F]
+
+
+table(rownames(umapDF) == colnames(normCounts))
+
+```  
+[Return to Top](#top_cell_labeling)  
+  
+UMAP Cell Visualizations
+
+```{r umap_cells, fig.height = 18, results = "asis"}
+stm("Plotting Batch UMAP by Various Groupings")
+
 cell_type_palette <- data.frame(
   seurat3_pbmc_type = c("B cell progenitor", "CD14+ Monocytes", "CD16+ Monocytes",
                        "CD4 Memory", "CD4 Naive","CD8 effector", "CD8 Naive", 
@@ -974,106 +1165,107 @@ cell_type_palette <- data.frame(
                  "#E546FA","#F598E5","#008A12", "#803CCF", "#967729", "#B1C4F0",
                  "#DCF0B1")
 )
-sample_pool <- unique(meta$pbmc_sample_pool)
 
 # Gene scaling
 # min_genes <- min(100, meta$n_genes)
 max_genes <- max(8000,meta$n_genes)
 max_umi <- max(60000,meta$n_umis)
-point_size <- 0.2
+point_size <- 0.1
 
-for(i in seq_along(sample_pool)){
-# for(i in 1:3){
-  df <- as.data.frame(meta[pbmc_sample_pool ==  sample_pool[i],])
-  sid_pool <-   paste0(df$pbmc_sample_id," (",df$pool_id,")")
-  
-  # cell labels
-  g1 <- ggplot(df, aes(umap_1, umap_2)) + 
-    geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) + 
-    ggtitle(paste0(sid_pool,": Cell Labels"))+
-    scale_color_manual(values = cell_type_palette$cell_color, labels = cell_type_palette$seurat3_pbmc_type)+
-    # scale_color_varibow()+
-    # facet_wrap(~paste0(pbmc_sample_id,"\n",pool_id), ncol = 1) +
-    theme_bw()+
-    theme(legend.key.size = unit(1, 'lines'))+
-    guides(colour = guide_legend(override.aes = list(size = 3)))
-  
-  # labeling scores
-  g2 <- ggplot(df, aes(umap_1, umap_2)) + 
-    geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) + 
-    ggtitle(paste0(sid_pool,": Label Scores"))+
-    # facet_wrap(~paste0(pbmc_sample_id,"\n",pool_id), ncol = 1) +
-    # scale_color_gradient2(low = "red", mid = "yellow", high ="green3", midpoint = 0.7) +
-    scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"), 
-                          breaks = c(0,0.25,0.5,0.75,1)) +
-    # scale_color_varibow()+
-    theme_bw()
-  
-  # fraction mitochondrial umi
-  g3 <- ggplot(df, aes(umap_1, umap_2)) + 
-    geom_point(alpha = 1, size = point_size, aes(color = fct_mito_umi)) + 
-    ggtitle(paste0(sid_pool,": Fraction Mitochondrial UMIs"))+
-    # facet_wrap(~paste0(pbmc_sample_id,"\n",pool_id), ncol = 1) +
-    # scale_color_gradient2(low = "green3", mid = "yellow", high ="red", midpoint = 0.2) +
-    scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"), 
-                          breaks = c(0,0.25,0.5,0.75,1)) +
-    # scale_color_varibow() +
-    theme_bw()
-  
-  # N Genes 
-  g4 <- ggplot(df, aes(umap_1, umap_2)) + 
-    geom_point(alpha = 1, size = point_size, aes(color = n_genes)) + 
-    ggtitle(paste0(sid_pool,": Gene Counts"))+
-    # scale_color_gradient2(low = "blue", mid = "green", high ="red", midpoint = 2000,
-    #                       limits = c(min_genes,max_genes), breaks =c(200,2000,4000,6000,8000)) +
-    # 
-    scale_color_gradientn(limits = c(0,max_genes),
-                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
-                          values = scales::rescale(c(0,500, 1000, 2000, 3000, 4000, max_genes),
-                                                   from = c(0, max_genes)),
-                          breaks = c(0,2000,4000,6000,8000)) +
-    theme_bw()
-  
-  # N UMIs 
-  g5 <- ggplot(df, aes(umap_1, umap_2)) + 
-    geom_point(alpha = 1, size = point_size, aes(color = n_umis)) + 
-    ggtitle(paste0(sid_pool,": UMI Counts"))+
-    # scale_color_gradient2(low = "blue", mid = "green", high ="red", midpoint = 2000,
-    #                       limits = c(min_genes,max_genes), breaks =c(200,2000,4000,6000,8000)) +
-    # 
-    scale_color_gradientn(limits = c(0,max_umi),
-                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
-                          values = scales::rescale(c(0,1000, 3000, 5000, 7500, 10000, max_umi),
-                                                   from = c(0, max_umi))) +
-    theme_bw()
-  # plotly::ggplotly(g5)
-  aligned_plots <- cowplot::align_plots(g1, g2, g3, g4, g5, align = "hv", axis = "tblr")  # uniform plot sizing regardless of legend size
-  print(cowplot::plot_grid(aligned_plots[[1]],
-                           aligned_plots[[2]],
-                           aligned_plots[[3]],
-                           aligned_plots[[4]],
-                           aligned_plots[[5]],
-                           nrow = 1))
-  # g1_plotly <- ggplotly(g1)
-  # plotly::subplot(ggplotly(g1), 
-  #                          ggplotly(g2), nrows = 1) 
-  
-  cat("  \n[Return to Top](#section_top)", labels = "", sep = "\n")
-}
+# Cell Types
+g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged)) 
 
-```
-</div>
+stm("Plotting cell type UMAP")
+g1 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
+  ggtitle("Cell Labels")+
+  scale_color_manual(values = cell_type_palette$cell_color, labels = cell_type_palette$seurat3_pbmc_type)+
+  theme_bw()+
+  theme(legend.key.size = unit(1, 'lines'))+
+  guides(colour = guide_legend(override.aes = list(size = 3)))
 
+# Labeling Scores
+stm("Plotting Labeling Score UMAP")
+g2 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) +
+  ggtitle("Label Scores")+
+  scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
+                        breaks = c(0,0.25,0.5,0.75,1)) +
+  theme_bw()
 
-```{r umaps, fig.width = 10, fig.height=fig_height_samples_4col}
-# ggplot(meta, aes(umap_1, umap_2)) + 
-#   geom_point(alpha = 0.7, aes(color = seurat_pbmc_type)) + 
-#   facet_wrap(~paste0(pbmc_sample_id,"\n",pool_id), ncol = 4) +
-#   theme_bw()
+# fraction mitochondrial umi
+stm("Plotting Fraction Mito UMAP")
+g3 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = fct_mito_umi)) +
+  ggtitle("Fraction Mitochondrial UMIs")+
+  scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
+                        breaks = c(0,0.25,0.5,0.75,1)) +
+  theme_bw()
+
+# N Genes
+stm("Plotting N Genes UMAP")
+g4 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = n_genes)) +
+  ggtitle("Gene Counts")+
+  scale_color_gradientn(limits = c(0,max_genes),
+                        colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
+                        values = scales::rescale(c(0,500, 1000, 2000, 3000, 4000, max_genes),
+                                                 from = c(0, max_genes)),
+                        breaks = c(0,2000,4000,6000,8000)) +
+  theme_bw()
+
+# N UMIs
+stm("Plotting N UMIs UMAP")
+g5 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = n_umis)) +
+  ggtitle("UMI Counts")+
+  scale_color_gradientn(limits = c(0,max_umi),
+                        colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
+                        values = scales::rescale(c(0,1000, 3000, 5000, 7500, 10000, max_umi),
+                                                 from = c(0, max_umi))) +
+  theme_bw()
+
+# Wells
+stm("Plotting Well UMAP")
+cols_well <- immutils::varibow(n_colors = length(unique(umapDF$well_id)))
+g6 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = well_id)) +
+  ggtitle("Well ID") +
+  scale_color_manual(values = cols_well)+
+  theme_bw() +
+  theme(legend.key.size = unit(1, 'lines')) +
+  guides(colour = guide_legend(override.aes = list(size = 3)))
+
+# Sample
+stm("Plotting Sample ID UMAP")
+cols_sample <- immutils::varibow(n_colors = length(unique(umapDF$pbmc_sample_id)))
+g7 <- g_base +
+  geom_point(alpha = 1, size = point_size, aes(color = pbmc_sample_id)) +
+  ggtitle("Sample ID")+
+  scale_color_manual(values = cols_sample)+ 
+  theme_bw()+
+  theme(legend.key.size = unit(1, 'lines'))+
+  guides(colour = guide_legend(override.aes = list(size = 3)))
+
+aligned_plots <- cowplot::align_plots(g1, g2, g3, g4, g5, g6, g7, align = "hv", axis = "tblr")  # uniform plot sizing 
+
+cowplot::plot_grid(aligned_plots[[1]],
+                   aligned_plots[[2]],
+                   aligned_plots[[3]],
+                   aligned_plots[[4]],
+                   aligned_plots[[5]],
+                   aligned_plots[[6]],
+                   aligned_plots[[7]],
+                   ncol = 2)
+
 ```  
+
+[Return to Top](#top_cell_labeling) 
+
 
 #### Seurat Labeling Scores  
 ```{r cell_labeling}
+stm("Plotting Seurat labeling score distributions")
 # score_breaks <- c(0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, Inf)
 # score_labels <- c("0-0.25", ">0.25-0.5", ">0.5-0.75", ">0.75-0.9", ">0.9-0.95",">0.95-0.99",">0.99")
 # meta[, score_bin := cut(seurat_pbmc_type_score, breaks = score_breaks, labels = score_labels, include.lowest = T)]
@@ -1089,7 +1281,6 @@ for(i in seq_along(sample_pool)){
 #   geom_bar(stat = "identity")+
 #   facet_wrap(~pbmc_sample_id) +
 #   theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
 
 # quality scores by sample
 meta_sample <- meta[ ,.(median_quality = median(seurat_pbmc_type_score)), by = pbmc_sample_id]
@@ -1107,49 +1298,52 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
   facet_wrap( ~ seurat_pbmc_type) 
   # facet_wrap(seurat_pbmc_type ~ pbmc_sample_id)
 
-
-
 ```
 
 
-<!-- #### Fraction Mitochondrial UMI per Cell    -->
 
-```{r fct_mito_umap, fig.width = 10, fig.height=fig_height_samples_4col} 
-# ggplot(meta, aes(umap_1, umap_2)) + 
-#   geom_point(alpha = 0.6, aes(color = fct_mito_umi)) + 
-#   facet_wrap(~paste0(pbmc_sample_id,"\n",pool_id), ncol = 4) +
-#   scale_color_gradient2(low = "green3", mid = "yellow", high ="red", midpoint = 0.2) +
-#   theme_bw()
+### Marker Visualization  
 
-``` 
+```{r marker_umap, fig.width = 10, fig.height=fig_height_samples_4col}
+stm("Plotting UMAP of marker genes")
+genes <- c("CD3E", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
+           "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP")
+cDF <- normCounts
+rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
+markerDF <- t(cDF[genes, ]) %>% as.data.frame()
+umapDF2 <- umapDF[, c("UMAP_1_merged", "UMAP_2_merged")]
+# table(rownames(markerDF) == rownames(umapDF2))
+umapDF2 <- cbind(umapDF2, markerDF) %>%
+           gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged)
+umapDF2$gene <- factor(umapDF2$gene, levels = genes)
 
-```{r fct_mito_scatter, fig.width = 10, fig.height=6} 
-# ggplot(meta, aes(x = seurat_pbmc_type_score, y = fct_mito_umi)) +
-#   geom_point(alpha = 0.3, aes(color = seurat_pbmc_type)) +
-#   facet_wrap(~seurat_pbmc_type, ncol = 4) +
-#   # facet_wrap(~paste0(seurat_pbmc_type,"\n",pool_id), ncol = 4) +
-#   theme_bw()
-``` 
+# plot UMAP per marker
+marker_umap_l <- list()
+for(G in genes) {
+  umapDF3 <- umapDF2 %>% dplyr::filter(gene %in% G)
+  # outFile <- paste("UMAP_MarkerExpression_", G, ".pdf", sep = "")
+  marker_umap_l[[G]] <- ggplot(data = umapDF3,
+                               mapping = aes(x = UMAP_1_merged, 
+                                             y = UMAP_2_merged, 
+                                             color = as.numeric(value))) +
+    geom_point(size = 0.8) +
+    scale_color_gradient(low = "white", high = "red") +
+    labs(x = "UMAP 1", y = "UMAP 2") +
+    labs(color = "NormCount") +
+    facet_wrap(~gene) +
+    theme(strip.text = element_text(size = 12),
+          panel.background = element_rect(fill = "#b6b7b2"),
+          axis.text.x = element_text(size = 10, color = "black"),
+          axis.text.y = element_text(size = 10, color = "black"),
+          axis.line = element_line(color = "grey"),
+          panel.grid = element_blank())
+  # pdf(file = outFile, width = 7, height = 7)
+  # print(plotumap)
+   # dev.off()
+}
 
+cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
-
-#### Marker UMAP  
-
-```{r test, fig.width = 10, fig.height=fig_height_samples_4col}
-# test <- read_h5_dgCMatrix(all_files[[2]],"matrix", feature_names = "name")
-# table(duplicated(rownames(test)))
-# which(duplicated(rownames(test)))
-# rownames(test)[which(duplicated(rownames(test)))]
-# dupnames <- rownames(test)[rownames(test) %in% rownames(test)[which(duplicated(rownames(test)))]]
-# test2 <- read_h5_dgCMatrix(all_files[[2]],"matrix", feature_names = "id")
-# table(duplicated(rownames(test2)))
-# which(duplicated(rownames(test2)))
-# rownames(test2)[which(duplicated(rownames(test2)))]
-# dupids <- rownames(test2)[rownames(test) %in% rownames(test)[which(duplicated(rownames(test)))]]
-# dupids
-                 
-# which(rownames(test)=="CD4") 
-# rownames(test2)[20240]
 
 ```
 
@@ -1166,7 +1360,16 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
 #   scale_color_gradient2(low = "blue", mid = "yellow", high = "red", midpoint = 1) +
 #   facet_wrap(~paste0(pbmc_sample_id,"\n",pool_id), ncol = 4)
 
-```
+```  
+
+### Leukopak Control  
+```{r control_summary}
+dummy_table %>% 
+  gt() %>% 
+  gt_fmt_comments()
+
+
+```  
 
 <!-- Batch Summary QC Executed here, referenced in "echo_qc_summary_chunk" above to allow display in first tab -->
 ```{r qc_summary, results = "hide"}
@@ -1206,14 +1409,7 @@ final_qc %>%
 
 ```  
 
-### Leukopak Control  
-```{r control_summary}
-dummy_table %>% 
-  gt() %>% 
-  gt_fmt_comments()
 
-
-```
 
 ### Session Information 
 <a id="top_session_info"></a>  
@@ -1239,7 +1435,7 @@ time_message <- paste0("Elapsed Time: ",
 print(time_message)
 stm(time_message)
 stm("H5 merge process complete.")
-```
+```  
 
 [Return to Top](#top_session_info)
 
