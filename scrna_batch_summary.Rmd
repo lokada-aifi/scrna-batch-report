@@ -64,37 +64,41 @@ quiet_library(plotly)
 quiet_library(immutils)
 quiet_library(tidyr)
 quiet_library(Seurat)
+quiet_library(inflection)
+quiet_library(future)
+quiet_library(future.apply)
 
 ```
 
 <!-- Argument parsing -->
 ```{r Parse arguments}
-if(is.null(params$in_dir)) {
-  in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  out_h5 <- tempfile(fileext = ".h5")
-  out_tbl <- tempfile(fileext = ".csv.gz")
-  allow_few_cells <- FALSE
-} else {
-  in_h5 <- params$in_h5
-  out_h5 <- params$out_h5
-  out_tbl <- params$out_tbl
-  allow_few_cells <- as.logical(params$allow_few_cells)
-  
-  if(is.null(out_tbl)) {
-    out_tbl <- "Not Used"
-  }
-}
-
-stm(paste0("IN  H5 file         : ", in_h5))
-stm(paste0("OUT H5 file         : ", out_h5))
-stm(paste0("OUT Cell Label Table: ", out_tbl))
+# if(is.null(params$in_dir)) {
+#   in_dir <- system.file("testdata", package = "scrna-batch-summary")
+#   out_h5 <- tempfile(fileext = ".h5")
+#   out_tbl <- tempfile(fileext = ".csv.gz")
+#   allow_few_cells <- FALSE
+# } else {
+#   in_h5 <- params$in_h5
+#   out_h5 <- params$out_h5
+#   out_tbl <- params$out_tbl
+#   allow_few_cells <- as.logical(params$allow_few_cells)
+#   
+#   if(is.null(out_tbl)) {
+#     out_tbl <- "Not Used"
+#   }
+# }
+# 
+# stm(paste0("IN  H5 file         : ", in_h5))
+# stm(paste0("OUT H5 file         : ", out_h5))
+# stm(paste0("OUT Cell Label Table: ", out_tbl))
 ```
 
 ```{r input_todelete}
 # Delete this section after defining param structure
-# in_dir <- "~/rnaseq_qc_report/test_data/B002/rna/B002-P1/labeled_h5/"
-in_dir <- "~/Projects/Exploration/B002/rna/"
-in_dir2 <- "~/Projects/Exploration/B002/rna/hto"
+in_dir <- "~/rnaseq_qc_report/test_data/B002/rna/"
+# in_dir <- "~/Projects/Exploration/B002/rna/"
+in_dir2 <- "~/rnaseq_qc_report/test_data/B002/rna/hto"
+# in_dir2 <- "~/Projects/Exploration/B002/rna/hto"
 out_dir <- ""
 
 ```
@@ -463,11 +467,13 @@ qc_aligned_barplot_mod <- function (meta, category_x = "batch_id",
 all_files <- list.files(path = in_dir, pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
 all_hto_json <- list.files(path = in_dir, pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
 all_split_json <- list.files(path = in_dir, pattern = "split_h5_metrics.json$", full.names = TRUE, recursive = TRUE)
-all_multiplet <- list.files(path = in_dir, pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
+all_multiplet <- list.files(path = in_dir2, pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
 
 
-stm(paste0("IN Directory        : ", in_dir))
-stm(paste0("IN Labeled H5 Files :\n\t", paste(all_files, collapse = "\n\t")))
+stm(paste0("IN Directory         : ", in_dir))
+stm(paste0("IN Labeled H5 Files  :\n\t", paste(all_files, collapse = "\n\t")))
+stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
+stm(paste0("IN Multiplet H5 Files:\n\t", paste(all_multiplet, collapse = "\n\t")))
 
 
 ```
@@ -827,7 +833,7 @@ qc_stacked_barplot_mod(all_meta,
                        colorset_y = "varibow",
                        name_y = "Fraction of Cells",
                        as_fraction = TRUE, facet_formula = formula("~pool_id"), facet_rows = 1, scales = "free_x") +
-  ggtitle(sprintf("%s: HTO Category Counts per Well", pools[i]))
+  ggtitle("HTO Category Counts per Well")
 
   
 ```
@@ -1004,12 +1010,17 @@ dummy_table %>%
 stm("Reading and merging all count matrices")
 
 # Merge the count matrices for all samples into 1 table
-all_counts_list <- lapply(all_files[1:5], H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
+avail_workers <- as.numeric(future::availableCores())
+future::plan("multiprocess", workers = avail_workers)
+
+all_counts_list <- future.apply::future_lapply(all_files[1:5], H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
+# all_counts_list <- lapply(all_files, H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
 all_counts_mat <- do.call(cbind, all_counts_list)
 all_counts_cells_bc <- meta$original_barcodes
 
 featDF <- read_h5_feature_meta(all_files[1])
 
+rm("all_counts_list")
 ```  
 
 ```{r combined_umap}
@@ -1018,6 +1029,7 @@ stm("Creating Seurat object from merged data")
 merged_so <- Seurat::CreateSeuratObject(counts = all_counts_mat)
 
 stm("Normalizing data")
+plan("sequential")  # reverting to sequential to avoid error
 # Normalize data
 merged_so <- Seurat::NormalizeData(object = merged_so, 
                                    normalization.method = "LogNormalize",
@@ -1042,55 +1054,64 @@ normCounts <- merged_so[["RNA"]]@data
 
 
 ```{r PCA}
-stm("Running PCA")
 pc_dims <- min(ncol(merged_so) - 1, 50)
 
+stm("Finding Variable Features")
+
 merged_so <- FindVariableFeatures(object = merged_so)
+
+stm("Scaling Data")
 merged_so <- ScaleData(object = merged_so)
+
+stm("Running PCA")
 merged_so <- RunPCA(object = merged_so, npcs = pc_dims)  
 
+# save pca object
+# saveRDS(merged_so, file = "merged_so_pcaresults.rds")
+# merged_so <- readRDS("merged_so_pcaresults.rds")
+ 
 ```  
 
 
 ```{r jackstraw_pc_selection }
 
 # Jackstraw Method
-sample_cells <- function(cl,
-                          sample.size,
-                          seed = 3030) {
-  cl.cells <- split(names(cl), cl)
-  sampled.cells <- sapply(names(cl.cells), function(x) {
-    cells <- cl.cells[[x]]
-    if (sample.size >= length(cells)) {
-      return(cells)
-    }
-    to.sample <- pmin(sample.size, length(cells))
-
-    set.seed(seed)
-    sample(cells, to.sample)
-  }, simplify = FALSE)
-  sampled.cells <- unlist(sampled.cells)
-  return(sampled.cells)
-}
-
-submerged <- meta %>%
-  filter(barcodes %in% rownames(merged_so[["RNA"]]@meta.features))
-predicted <- submerged$seurat_pbmc_type
-names(predicted) <- submerged$barcodes
-jackstraw_cells <- sample_cells(predicted, 100)
-jackstraw_so <- merged_so[,jackstraw_cells]
-
-jackstraw_so <- JackStraw(object = jackstraw_so,
-                          dims = pc_dims,
-                          num.replicate = 50,
-                          verbose = FALSE)
-jackstraw_so <- ScoreJackStraw(object = jackstraw_so,
-                               dims = 1:pc_dims)
-
-pc_pvals <- jackstraw_so@reductions$pca@jackstraw$overall.p.values[,2]
-good_pcs <- pc_pvals < 0.05
-
-pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+# sample_cells <- function(cl,
+#                           sample.size,
+#                           seed = 3030) {
+#   cl.cells <- split(names(cl), cl)
+#   sampled.cells <- sapply(names(cl.cells), function(x) {
+#     cells <- cl.cells[[x]]
+#     if (sample.size >= length(cells)) {
+#       return(cells)
+#     }
+#     to.sample <- pmin(sample.size, length(cells))
+# 
+#     set.seed(seed)
+#     sample(cells, to.sample)
+#   }, simplify = FALSE)
+#   sampled.cells <- unlist(sampled.cells)
+#   return(sampled.cells)
+# }
+# 
+# submerged <- meta %>%
+#   filter(barcodes %in% rownames(merged_so[["RNA"]]@meta.features))
+# predicted <- submerged$seurat_pbmc_type
+# names(predicted) <- submerged$barcodes
+# jackstraw_cells <- sample_cells(predicted, 100)
+# jackstraw_so <- merged_so[,jackstraw_cells]
+# 
+# jackstraw_so <- JackStraw(object = jackstraw_so,
+#                           dims = pc_dims,
+#                           num.replicate = 50,
+#                           verbose = FALSE)
+# jackstraw_so <- ScoreJackStraw(object = jackstraw_so,
+#                                dims = 1:pc_dims)
+# 
+# pc_pvals <- jackstraw_so@reductions$pca@jackstraw$overall.p.values[,2]
+# good_pcs <- pc_pvals < 0.05
+# 
+# pc_embeddings <- merged_so@reductions$pca@cell.embeddings
 ```
 
 
@@ -1123,8 +1144,8 @@ pc_embeddings <- merged_so@reductions$pca@cell.embeddings
 # Run UMAP
 stm("Running UMAP on selected coordinates...")
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
-umap_results <- uwot::umap(pc_embeddings[, 1:inflectionPoint],
-                           min_dist = 0.1)
+# umap_results <- uwot::umap(pc_embeddings[, 1:inflectionPoint],
+#                            min_dist = 0.1)
 
 merged_so_elbow <- Seurat::RunUMAP(merged_so,
                                    dims = 1:inflectionPoint,
@@ -1132,21 +1153,37 @@ merged_so_elbow <- Seurat::RunUMAP(merged_so,
                                    umap.method = "uwot",
                                    seed.use = 3,
                                    verbose = TRUE)
+# saveRDS(merged_so_elbow, file = "merged_so_elbow.Rds")
+```
+
+```{r recover_analysis }
+# merged_so <- readRDS("merged_so_pcaresults.rds")
+# merged_so_elbow <- readRDS("merged_so_elbow.Rds")
+```
 
 
+```{r umap_cleanup}
+# # Get UMAP coordinates
+# umapDF <- umap_results %>%
+#           as.data.frame() %>%
+#           dplyr::rename(UMAP_1_merged = V1, UMAP_2_merged = V2) %>%
+#           # tibble::rownames_to_column(var = "barcodes")
+#           dplyr::mutate(barcodes = rownames(pc_embeddings))
+# # umapDF <- merge(umapDF, merged_so_elbow@"meta.data", by = "barcodes")
+# umapDF <- merge(umapDF, meta, by = "barcodes")
+# rownames(umapDF) <- umapDF$barcodes
 
 # Get UMAP coordinates
 umapDF <- merged_so_elbow[["umap"]]@cell.embeddings %>%
           as.data.frame() %>%
-          dplyr::rename(UMAP_1_merged = UMAP_1, UMAP_2_merged = UMAP_2) %>% 
+          dplyr::rename(UMAP_1_merged = UMAP_1, UMAP_2_merged = UMAP_2) %>%
           tibble::rownames_to_column(var = "barcodes")
-# umapDF <- merge(umapDF, merged_so_elbow@"meta.data", by = "barcodes")
 umapDF <- merge(umapDF, meta, by = "barcodes")
 rownames(umapDF) <- umapDF$barcodes
 umapDF <- umapDF[rownames(merged_so_elbow@"meta.data"), , drop = F]
 
-
-table(rownames(umapDF) == colnames(normCounts))
+normCounts <-merged_so[["RNA"]]@data
+assertthat::assert_that(all(rownames(umapDF) == colnames(normCounts)))
 
 ```  
 [Return to Top](#top_cell_labeling)  
@@ -1163,7 +1200,8 @@ cell_type_palette <- data.frame(
                        "pDC", "Platelets", "pre-B cell"),
   cell_color = c("#FF0000","#FF8C00","#FFEE00","#44FF00", "#00E1FF","#0000FF",
                  "#E546FA","#F598E5","#008A12", "#803CCF", "#967729", "#B1C4F0",
-                 "#DCF0B1")
+                 "#DCF0B1"), 
+  stringsAsFactors = FALSE
 )
 
 # Gene scaling
@@ -1179,8 +1217,9 @@ stm("Plotting cell type UMAP")
 g1 <- g_base +
   geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
   ggtitle("Cell Labels")+
-  scale_color_manual(values = cell_type_palette$cell_color, labels = cell_type_palette$seurat3_pbmc_type)+
-  theme_bw()+
+  scale_color_manual(values = cell_type_palette$cell_color, 
+                     breaks = cell_type_palette$seurat3_pbmc_type) +
+  theme_bw() +
   theme(legend.key.size = unit(1, 'lines'))+
   guides(colour = guide_legend(override.aes = list(size = 3)))
 
@@ -1207,7 +1246,7 @@ stm("Plotting N Genes UMAP")
 g4 <- g_base +
   geom_point(alpha = 1, size = point_size, aes(color = n_genes)) +
   ggtitle("Gene Counts")+
-  scale_color_gradientn(limits = c(0,max_genes),
+  scale_color_gradientn(limits = c(0, max_genes),
                         colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
                         values = scales::rescale(c(0,500, 1000, 2000, 3000, 4000, max_genes),
                                                  from = c(0, max_genes)),
@@ -1309,12 +1348,12 @@ stm("Plotting UMAP of marker genes")
 genes <- c("CD3E", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
            "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP")
 cDF <- normCounts
-rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
+# rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
 markerDF <- t(cDF[genes, ]) %>% as.data.frame()
 umapDF2 <- umapDF[, c("UMAP_1_merged", "UMAP_2_merged")]
 # table(rownames(markerDF) == rownames(umapDF2))
 umapDF2 <- cbind(umapDF2, markerDF) %>%
-           gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged)
+           tidyr::gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged)
 umapDF2$gene <- factor(umapDF2$gene, levels = genes)
 
 # plot UMAP per marker
