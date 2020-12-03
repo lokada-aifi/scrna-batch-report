@@ -1,0 +1,200 @@
+{
+  "report_type": "hto_processing",
+  "report_datetime": "2020-02-20 14:26:28",
+  "report_uuid": "09f9206e-53ed-11ea-98cb-1e7d839376fe",
+  "package": "HTOparser",
+  "package_version": "1.0.10",
+  "well_id": "T001-P1C1W5",
+  "pbmc_sample_hto_stats": {
+    "S02": {
+      "hto_barcode": "GTCAACTCTTTAGCG",
+      "hash_tag": "HT1",
+      "cutoff": 92,
+      "n_pos": 3230,
+      "n_neg": 27547,
+      "n_below_threshold": 3153,
+      "frac_pos": 0.1049,
+      "frac_neg": 0.8951,
+      "frac_below_threshold": 0.1024,
+      "n_singlets": 1931
+    },
+    "S03": {
+      "hto_barcode": "TGATGGCCTATTGGG",
+      "hash_tag": "HT2",
+      "cutoff": 150,
+      "n_pos": 3316,
+      "n_neg": 27461,
+      "n_below_threshold": 91,
+      "frac_pos": 0.1077,
+      "frac_neg": 0.8923,
+      "frac_below_threshold": 0.003,
+      "n_singlets": 1937
+    },
+    "S04": {
+      "hto_barcode": "TTCCGCCTCTCTTTG",
+      "hash_tag": "HT3",
+      "cutoff": 139,
+      "n_pos": 3405,
+      "n_neg": 27372,
+      "n_below_threshold": 98,
+      "frac_pos": 0.1106,
+      "frac_neg": 0.8894,
+      "frac_below_threshold": 0.0032,
+      "n_singlets": 2013
+    },
+    "S05": {
+      "hto_barcode": "AGTAAGTTCAGCGTA",
+      "hash_tag": "HT4",
+      "cutoff": 109,
+      "n_pos": 3225,
+      "n_neg": 27552,
+      "n_below_threshold": 702,
+      "frac_pos": 0.1048,
+      "frac_neg": 0.8952,
+      "frac_below_threshold": 0.0228,
+      "n_singlets": 1866
+    },
+    "S06": {
+      "hto_barcode": "AAGTATCGTTTCGCA",
+      "hash_tag": "HT5",
+      "cutoff": 112,
+      "n_pos": 3054,
+      "n_neg": 27723,
+      "n_below_threshold": 624,
+      "frac_pos": 0.0992,
+      "frac_neg": 0.9008,
+      "frac_below_threshold": 0.0203,
+      "n_singlets": 1790
+    },
+    "S07": {
+      "hto_barcode": "GGTTGCCAGATGTCA",
+      "hash_tag": "HT6",
+      "cutoff": 54,
+      "n_pos": 3114,
+      "n_neg": 27663,
+      "n_below_threshold": 9129,
+      "frac_pos": 0.1012,
+      "frac_neg": 0.8988,
+      "frac_below_threshold": 0.2966,
+      "n_singlets": 1827
+    },
+    "S08": {
+      "hto_barcode": "TGTCTTTCCTGCCAG",
+      "hash_tag": "HT7",
+      "cutoff": 46,
+      "n_pos": 3184,
+      "n_neg": 27593,
+      "n_below_threshold": 10179,
+      "frac_pos": 0.1035,
+      "frac_neg": 0.8965,
+      "frac_below_threshold": 0.3307,
+      "n_singlets": 1888
+    },
+    "S09": {
+      "hto_barcode": "CTCCTCTGCAATTAC",
+      "hash_tag": "HT8",
+      "cutoff": 49,
+      "n_pos": 3123,
+      "n_neg": 27654,
+      "n_below_threshold": 6993,
+      "frac_pos": 0.1015,
+      "frac_neg": 0.8985,
+      "frac_below_threshold": 0.2272,
+      "n_singlets": 1853
+    },
+    "S10": {
+      "hto_barcode": "CAGTAGTCACGGTCA",
+      "hash_tag": "HT9",
+      "cutoff": 50,
+      "n_pos": 3347,
+      "n_neg": 27430,
+      "n_below_threshold": 11127,
+      "frac_pos": 0.1088,
+      "frac_neg": 0.8912,
+      "frac_below_threshold": 0.3615,
+      "n_singlets": 1936
+    },
+    "S11": {
+      "hto_barcode": "ATTGACCCGCGTTAG",
+      "hash_tag": "HT10",
+      "cutoff": 42,
+      "n_pos": 2922,
+      "n_neg": 27855,
+      "n_below_threshold": 18017,
+      "frac_pos": 0.0949,
+      "frac_neg": 0.9051,
+      "frac_below_threshold": 0.5854,
+      "n_singlets": 1689
+    },
+    "S12": {
+      "hto_barcode": "TAACGACCAGCCATA",
+      "hash_tag": "HT12",
+      "cutoff": 44,
+      "n_pos": 3701,
+      "n_neg": 27076,
+      "n_below_threshold": 6392,
+      "frac_pos": 0.1203,
+      "frac_neg": 0.8797,
+      "frac_below_threshold": 0.2077,
+      "n_singlets": 2186
+    },
+    "NA_1": {
+      "hto_barcode": "AAATCTCTCAGGCTC",
+      "hash_tag": {},
+      "cutoff": 0,
+      "n_pos": 0,
+      "n_neg": 30777,
+      "n_below_threshold": 30777,
+      "frac_pos": 0,
+      "frac_neg": 1,
+      "frac_below_threshold": 1,
+      "n_singlets": 0
+    },
+    "S26": {
+      "hto_barcode": "CTGTATGTCCGATTG",
+      "hash_tag": "HT14",
+      "cutoff": 3,
+      "n_pos": 0,
+      "n_neg": 30777,
+      "n_below_threshold": 30777,
+      "frac_pos": 0,
+      "frac_neg": 1,
+      "frac_below_threshold": 1,
+      "n_singlets": 0
+    },
+    "IMM00-002": {
+      "hto_barcode": "TAAGATTCAGAGCGA",
+      "hash_tag": "HT15",
+      "cutoff": 15,
+      "n_pos": 685,
+      "n_neg": 30092,
+      "n_below_threshold": 30048,
+      "frac_pos": 0.0223,
+      "frac_neg": 0.9777,
+      "frac_below_threshold": 0.9763,
+      "n_singlets": 388
+    }
+  },
+  "hto_category_stats": {
+    "no_hash": {
+      "n_cells": 2601,
+      "frac_cells": 0.0845
+    },
+    "singlet": {
+      "n_cells": 21304,
+      "frac_cells": 0.6922
+    },
+    "doublet": {
+      "n_cells": 5808,
+      "frac_cells": 0.1887
+    },
+    "multiplet": {
+      "n_cells": 1064,
+      "frac_cells": 0.0346
+    },
+    "missing": {
+      "n_cells": 0,
+      "frac_cells": 0
+    }
+  }
+}
