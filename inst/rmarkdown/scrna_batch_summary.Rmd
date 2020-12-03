@@ -10,9 +10,9 @@ output:
     self_contained: true
   tables: yes
 params:
-  batch: "BXX"
+  batch: NULL
   in_dir: NULL
-  in_key: 
+  in_key: NULL
   out_dir: NULL
 ---
 
@@ -81,34 +81,33 @@ cell_type_palette <- data.frame(
 
 <!-- Argument parsing --------------------------------------------------------->
 ```{r Parse arguments}
-# if(is.null(params$in_dir)) {
-#   in_dir <- system.file("testdata", package = "scrna-batch-summary")
-#   out_
-# } else {
-#   in_h5 <- params$in_h5
-#   out_h5 <- params$out_h5
-#   out_tbl <- params$out_tbl
-#   allow_few_cells <- as.logical(params$allow_few_cells)
-# 
-#   if(is.null(out_tbl)) {
-#     out_tbl <- "Not Used"
-#   }
-# }
-# 
-# stm(paste0("IN  H5 file         : ", in_h5))
-# stm(paste0("OUT H5 file         : ", out_h5))
+if(is.null(params$in_dir)) {
+  # in_dir <- system.file("testdata", package = "scrna-batch-summary")
+  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  batch <- "T001"
+  in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
+} else {
+  in_dir <- params$in_h5
+  batch <-  params$batch
+  in_key <- params$in_key
+}
+
+stm(paste0("IN Batch        : ", batch))
+stm(paste0("INDirectory     : ", in_dir))
+stm(paste0("IN Sample Key   : ", in_key))
 # stm(paste0("OUT Cell Label Table: ", out_tbl))
 ```
 
 ```{r input_todelete}
-# Delete this section after defining param structure
-# in_dir_labeled <- "~/rnaseq_qc_report/test_data/B002/rna"
-in_dir_labeled <- "~/Projects/Exploration/B002/rna/"
-# in_dir_hto <- "~/rnaseq_qc_report/test_data/B002/rna/hto"
-in_dir_hto <- "~/Projects/Exploration/B002/rna/hto"
-in_dir_mult <- "~/Projects/Exploration/B002/rna/hto"
-in_dir_ctrl <- "~/Projects/Exploration/controls/"
-out_dir <- ""
+# # Delete this section after defining param structure
+# # in_dir_labeled <- "~/rnaseq_qc_report/test_data/B002/rna"
+# # in_dir_labeled <- "~/Projects/Exploration/B002/rna/"
+# in_dir <- "~/Packages/scrna-batch-report/inst/extdata/"
+# # in_dir_hto <- "~/rnaseq_qc_report/test_data/B002/rna/hto"
+# # in_dir_hto <- "~/Projects/Exploration/B002/rna/hto"
+# # in_dir_mult <- "~/Projects/Exploration/B002/rna/hto"
+# # in_dir_ctrl <- "~/Projects/Exploration/controls/"
+# out_dir <- ""
 
 ```
 
@@ -576,19 +575,12 @@ add_axis_title_spacing_plotly <- function(plotly_obj, axis, n_lines){
 
 
 <!-- Parse Input ----------------------------------------------------------- -->
-```{r parse_input}
+```{r find_validate_files}
 # Get list of all target files
-if(test_format_hook){
-  all_labeled_h5 <- list.files(path = in_dir_labeled, pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)[1:3]
-  all_hto_json <- list.files(path = in_dir_hto, pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
-  all_multiplet_h5 <- list.files(path = in_dir_mult, pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
-  all_control_h5 <- list.files(path = in_dir_ctrl, pattern = paste0(control_sample_pattern,".*_labeled.h5$"), full.names = TRUE, recursive = TRUE)[1:3]
-} else {
-  all_labeled_h5 <- list.files(path = in_dir_labeled, pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
-  all_hto_json <- list.files(path = in_dir_hto, pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
-  all_multiplet_h5 <- list.files(path = in_dir_mult, pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
-  all_control_h5 <- list.files(path = in_dir_ctrl, pattern = paste0(control_sample_pattern,".*_labeled.h5$"), full.names = TRUE, recursive = TRUE)
-}
+all_labeled_h5 <- list.files(path = file.path(in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+all_hto_json <- list.files(path = file.path(in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
+all_multiplet_h5 <- list.files(path = file.path(in_dir,"multiplet_h5"), pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
+all_control_h5 <- list.files(path = file.path(in_dir,"control"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
 
 stm(paste0("IN Labeled H5 Files  :\n\t", paste(all_labeled_h5, collapse = "\n\t")))
 stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
@@ -601,7 +593,12 @@ stm(paste0("IN Control Labeled H5 Files:\n\t", paste(all_control_h5, collapse = 
 ```{r merge_meta}
 # Merge Metadata
 stm("Reading in labeled h5 file meta data")
-meta_list <- lapply(all_labeled_h5, read_h5_cell_meta)
+
+# Merge the count matrices for all samples into 1 table
+avail_workers <- as.numeric(future::availableCores())
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
+
+meta_list <- future_lapply(all_labeled_h5, read_h5_cell_meta)
 meta <- do.call(rbind, meta_list)
 setDT(meta)
 remove("meta_list")
@@ -610,7 +607,8 @@ remove("meta_list")
 ```{r merge_well}
 # Merge Well Data
 stm("Reading in labeled h5 file well data")
-well_list <- lapply(all_labeled_h5, read_h5_well_meta)
+
+well_list <- future_lapply(all_labeled_h5, read_h5_well_meta)
 well_info <- unique(do.call(rbind, well_list))
 setDT(well_info)
 
@@ -620,7 +618,7 @@ remove("well_list")
 ```{r read_json}
 # Read in json files
 stm("Reading in hto processing metrics json files")
-well_hto_json_list <- lapply(all_hto_json,read_hto_well_json)
+well_hto_json_list <- future_lapply(all_hto_json,read_hto_well_json)
 well_hto_json_df <- do.call(rbind, well_hto_json_list)
 well_hto_json_df <- well_hto_json_df %>% 
   dplyr::mutate(sample_hto = paste(hto_barcode, pbmc_sample_id, sep = "\n")) %>% 
@@ -634,7 +632,7 @@ remove("well_hto_json_list")
 
 ```{r read_multiplet}
 stm("Reading in multiplet h5 file meta data")
-multiplet_meta_list <- lapply(all_multiplet_h5, read_h5_cell_meta)
+multiplet_meta_list <- future_lapply(all_multiplet_h5, read_h5_cell_meta)
 multiplet_meta <- do.call(rbind, multiplet_meta_list)
 setDT(multiplet_meta)
 all_meta <- merge(meta, multiplet_meta, all = TRUE)
@@ -644,29 +642,31 @@ remove("multiplet_meta_list","multiplet_meta")
 
 ```{r read_control}
 stm("Reading in previous control labeled h5 file meta data")
-control_meta_list <- lapply(all_control_h5, read_h5_cell_meta)
+control_meta_list <- future_lapply(all_control_h5, read_h5_cell_meta)
 control_meta <- do.call(rbind, control_meta_list)
 setDT(control_meta)
 
-run_control <- meta %>% 
+# TODO: Decide if current control should be in historical control
+run_control <- meta %>%
   filter(grepl(control_sample_pattern, pbmc_sample_id))
- 
-all_control <- rbind(run_control, control_meta)
+
+all_control <- rbind(run_control, control_meta) %>% 
+  unique()
   # dplyr::full_join(multiplet_meta)  # TODO: clean up formatting
 remove("control_meta_list","control_meta")
 ```
 
 ```{r fix_p1_meta_todelete }
-meta[, ":="(pool_id = gsub("C.*", "", pool_id),
-            well_id = gsub("-RNA", "", well_id),
-            batch_id = gsub("-.*", "", batch_id))]
-all_meta[, ":="(pool_id = gsub("C.*", "", pool_id),
-            well_id = gsub("-RNA", "", well_id),
-            batch_id = gsub("-.*", "", batch_id))]
-all_control[, ":="(pool_id = gsub("C.*", "", pool_id),
-            well_id = gsub("-RNA", "", well_id),
-            batch_id = gsub("-.*", "", batch_id))]
-well_info[, ":="(well_id = gsub("-RNA", "", well_id))]
+# meta[, ":="(pool_id = gsub("C.*", "", pool_id),
+#             well_id = gsub("-RNA", "", well_id),
+#             batch_id = gsub("-.*", "", batch_id))]
+# all_meta[, ":="(pool_id = gsub("C.*", "", pool_id),
+#             well_id = gsub("-RNA", "", well_id),
+#             batch_id = gsub("-.*", "", batch_id))]
+# all_control[, ":="(pool_id = gsub("C.*", "", pool_id),
+#             well_id = gsub("-RNA", "", well_id),
+#             batch_id = gsub("-.*", "", batch_id))]
+# well_info[, ":="(well_id = gsub("-RNA", "", well_id))]
 ```
 
 ```{r add_vars_meta }
@@ -685,7 +685,6 @@ all_meta[ ,plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
 all_control[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 all_control[ ,pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
 all_control[ ,plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
-well_info[, ":="(well_id = gsub("-RNA", "", well_id))]
 ```
 
 ## Batch Information    
@@ -699,6 +698,7 @@ n_pools <- length(pools)
 wells <- unique(meta$well_id)
 n_wells <- length(wells)
 
+# samples <- unique(meta$pbmc_sample_id)
 samples <- unique(meta$pbmc_sample_id)
 n_samples <- length(samples)
 
@@ -1228,7 +1228,7 @@ merged_so <- Seurat::CreateSeuratObject(counts = all_counts_mat)
 
 # Normalize data
 stm("Normalizing data")
-plan("sequential")  # reverting to sequential to avoid error
+future::plan("sequential")  # reverting to sequential to avoid error
 merged_so <- Seurat::NormalizeData(object = merged_so, 
                                    normalization.method = "LogNormalize",
                                    scale.factor = 10000,
