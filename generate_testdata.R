@@ -1,4 +1,5 @@
 # Set Up
+remove(list=ls())
 library(stringr)
 library(H5weaver)
 library(doMC)
@@ -184,8 +185,9 @@ foreach(i=seq_along(all_labeled_h5)) %dopar% {
   
   # return to original format and save new file
   sample_list <- h5_list_convert_from_dgCMatrix(sample_list)
+  pool <- unique(sample_list$matrix$observations$pool_id)
   write_h5_list(sample_list,
-                file.path(mydir, sprintf("inst/extdata/labeled_h5/%s_%s_labeled.h5", batch, samples[i])),
+                file.path(mydir, sprintf("inst/extdata/labeled_h5/%s_%s_labeled.h5", pool, samples[i])),
                 overwrite = TRUE)
   h5closeAll()
 }
