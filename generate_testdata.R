@@ -284,7 +284,8 @@ for (i in seq_along(all_json)){
   
   qc_list_json <- jsonlite::toJSON(json_list,
                                    auto_unbox = TRUE,
-                                   pretty = TRUE)
+                                   pretty = TRUE,
+                                   null = "null")
   writeLines(qc_list_json,
              file.path(mydir, sprintf("inst/extdata/hash/%s_hto_processing_metrics.json",  json_list$well_id)))
   

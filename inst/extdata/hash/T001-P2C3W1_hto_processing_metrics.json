@@ -152,7 +152,7 @@
     },
     "NA_1": {
       "hto_barcode": "CTGTATGTCCGATTG",
-      "hash_tag": {},
+      "hash_tag": null,
       "cutoff": 0,
       "n_pos": 0,
       "n_neg": 24612,
