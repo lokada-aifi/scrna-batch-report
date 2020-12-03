@@ -3,8 +3,6 @@
 .Rproj.user
 scrna-batch-report.Rproj
 .DS_Store
-test_data/
-inst/
 merged_so_elbow.Rds
 merged_so_pcaresults.rds
 
