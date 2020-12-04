@@ -905,25 +905,25 @@ pool_summary %>%
 
 #### Well-Based Summary  
 ```{r well_summary}
-
-cutoffs <- well_hto_json_df %>%
-  dplyr::group_by(hto_barcode, pbmc_sample_id, sample_hto, pool_id) %>%
-  dplyr::summarize(n_wells = n(),
-                   median_cutoff = median(cutoff),
-                   cv_cutoff = sd(cutoff)/mean(cutoff)*100)
-cutoffs
-
-
-well_summary <- all_meta %>% 
-  group_by(pool_id, well_id) %>% 
-  summarize(n_cells = n(),
-         median_reads = median(n_reads),
-         median_umis = median(n_umis),
-         median_genes = median(n_genes), 
-         .groups = "drop") %>% 
-  arrange(pool_id, well_id)
-well_summary %>% 
-  gt()
+# 
+# cutoffs <- well_hto_json_df %>%
+#   dplyr::group_by(hto_barcode, pbmc_sample_id, sample_hto, pool_id) %>%
+#   dplyr::summarize(n_wells = n(),
+#                    median_cutoff = median(cutoff),
+#                    cv_cutoff = sd(cutoff)/mean(cutoff)*100)
+# cutoffs
+# 
+# 
+# well_summary <- all_meta %>% 
+#   group_by(pool_id, well_id) %>% 
+#   summarize(n_cells = n(),
+#          median_reads = median(n_reads),
+#          median_umis = median(n_umis),
+#          median_genes = median(n_genes), 
+#          .groups = "drop") %>% 
+#   arrange(pool_id, well_id)
+# well_summary %>% 
+#   gt()
 ```  
 
 #### HTO Assignment Cutoffs  
@@ -1102,6 +1102,7 @@ cowplot::plot_grid(plotlist = plot_list, nrow = 1)
 ##### Counts by HTO Category and Barcode  
 ```{r read_counts, height = 5, width = 12}
 # Reads per hto cat
+stm("Generating read count violin plots")
 category_reads_violins <- qc_violin_plot(all_meta,
                                          category_x = "hto_category",
                                          name_x = "HTO Category",
@@ -1130,6 +1131,7 @@ plot_grid(plotlist = reads_violin_list,
 
 ```{r umi_counts}
 # UMI per category plot
+stm("Generating umi count violin plots")
 category_umis_violins <- qc_violin_plot(all_meta,
                                          category_x = "hto_category",
                                          name_x = "HTO Category",
@@ -1208,10 +1210,11 @@ layout(hovermode = 'compare')
 ```{r combine count matrices for all samples}
 stm("Reading and merging all count matrices")
 
-# Merge the count matrices for all samples into 1 table
+# Set up for multithreading
 avail_workers <- as.numeric(future::availableCores())
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
+# Merge the count matrices for all samples into 1 table
 all_counts_list <- future.apply::future_lapply(all_labeled_h5, H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
 # all_counts_list <- lapply(all_labeled_h5, H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
 all_counts_mat <- do.call(cbind, all_counts_list)
