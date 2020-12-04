@@ -50,7 +50,8 @@ rmd_path <- file.path(args$out_dir,
 #           rmd_path,
 #           overwrite = TRUE)
 
-file.copy("~/Packages/scrna-batch-report/scrna_batch_summary.Rmd",
+#file.copy("~/Packages/scrna-batch-report/scrna_batch_summary.Rmd",
+file.copy("/home/jupyter/scrna-batch-report/inst/rmarkdown/scrna_batch_summary.Rmd",
           rmd_path,
           overwrite = TRUE)
 

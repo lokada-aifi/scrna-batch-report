@@ -5,4 +5,7 @@ scrna-batch-report.Rproj
 .DS_Store
 merged_so_elbow.Rds
 merged_so_pcaresults.rds
-
+.hisedownloadlog.rds
+.hisefilelog.rds
+.ipynb_checkpoints/
+inst/rmarkdown/.ipynb_checkpoints/

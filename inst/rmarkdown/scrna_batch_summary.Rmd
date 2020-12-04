@@ -83,7 +83,9 @@ cell_type_palette <- data.frame(
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   # in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  #in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+   in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
+
   batch <- "T001"
   in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
 } else {
