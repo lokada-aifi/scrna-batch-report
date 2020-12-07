@@ -89,9 +89,10 @@ if(is.null(params$in_dir)) {
   batch <- "T001"
   in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
 } else {
-  in_dir <- params$in_h5
+  in_dir <- params$in_dir
   batch <-  params$batch
   in_key <- params$in_key
+  out_dir <- params$out_dir
 }
 
 stm(paste0("IN Batch        : ", batch))
@@ -1286,6 +1287,8 @@ cumvar_string <- sprintf(fmt = "%.1f", cumvar_inflection*100)
 # plot(p_elbow)
 
 pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+
+stm(sprintf("Using %s principal components for umap",inflectionPoint))
 ```  
 
 Batch-level UMAP using `r {inflectionPoint}` principal components (`r {cumvar_string}`% explained variance).  
@@ -1293,7 +1296,8 @@ Batch-level UMAP using `r {inflectionPoint}` principal components (`r {cumvar_st
 ```{r merged_umap}
 
 # Run UMAP
-stm("Running UMAP on selected coordinates...")
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
+stm(sprintf("Running UMAP on selected coordinates. Using %s cores", nbrOfWorkers()))
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
 merged_so_elbow <- Seurat::RunUMAP(merged_so,
@@ -1301,8 +1305,10 @@ merged_so_elbow <- Seurat::RunUMAP(merged_so,
                                    # umap.method = "umap-learn",
                                    umap.method = "uwot",
                                    seed.use = 3,
-                                   verbose = FALSE)
+                                   verbose = TRUE)
 # saveRDS(merged_so_elbow, file = "merged_so_elbow.Rds")
+
+future::plan("sequential")
 ```
 
 ```{r recover_analysis }
@@ -1610,19 +1616,19 @@ cowplot::plot_grid(aligned_plots[[1]],
                    ncol = 2)
 
 
-gp1 <- ggplotly(g1) %>%
- layout(legend= list(itemsizing='constant'))
+# gp1 <- ggplotly(g1) %>%
+#  layout(legend= list(itemsizing='constant'))
 
-gp2 <- ggplotly(g2) %>% 
- layout(legend= list(itemsizing='constant'))
+# gp2 <- ggplotly(g2) %>% 
+#  layout(legend= list(itemsizing='constant'))
 
-subplot(gp1, gp2, nrows = 1, margin = 0.05)
+# subplot(gp1, gp2, nrows = 1, margin = 0.05)
 
 ```
 
 [Return to Top](#top_cell_labeling) 
 
-#### UMAP for cells with Fraction Mitochondrial UMI`r {fct_mito_umi_threshold}`  
+#### UMAP for cells with Fraction Mitochondrial UMI `r {fct_mito_umi_threshold}`  
 Removed `r {sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)}` cells (`r {round(sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)/nrow(umapDF)*100,1)}`%)
 
 ```{r cell_labeling_lowmito, fig.height = 10, fig.width = 20}
@@ -1864,6 +1870,7 @@ Batch-level UMAP using `r {inflectionPoint}` principal components (`r {cumvar_st
 
 ```{r merged_umap_ctrl}
 # Run UMAP
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 stm("Running UMAP on selected coordinates...")
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
@@ -1874,6 +1881,8 @@ ctrl_so_elbow <- Seurat::RunUMAP(ctrl_so,
                                    seed.use = 3,
                                    verbose = FALSE)
 # saveRDS(ctrl_so_elbow, file = "ctrl_so_elbow.Rds")
+
+future::plan("sequential")
 ```
 
 
