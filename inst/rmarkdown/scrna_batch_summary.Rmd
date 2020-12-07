@@ -1258,6 +1258,7 @@ suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 merged_so <- FindVariableFeatures(object = merged_so)
 
 stm("Scaling Data")
+future::plan("sequential")  # reverting to sequential to avoid error
 merged_so <- ScaleData(object = merged_so, verbose = FALSE)
 
 stm("Running PCA")
@@ -1270,8 +1271,8 @@ merged_so <- RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)
 ```  
 
 ```{r jackstraw_pc_selection}
-stm("Determining dimensionality via jackstraw method")
-
+#stm("Determining dimensionality via jackstraw method")
+#suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 sample_cells <- function(cl, 
                           sample.size, 
                           seed = 3030) {
@@ -1290,33 +1291,50 @@ sample_cells <- function(cl,
   return(sampled.cells)
 }
 
-jackstraw_cells <- sample_cells(merged_so$predicted.id, 100)
-jackstraw_so <- merged_so[,jackstraw_cells]
+#labels_order <- meta$seurat_pbmc_type[meta$barcodes == colnames(merged_so)]
+#names(labels_order) <- colnames(merged_so)
 
-jackstraw_so <- JackStraw(object = jackstraw_so, 
-                          dims = pc_dims, 
-                          num.replicate = 50,  #  increase to 96 if run on 96 core?
-                          verbose = FALSE)
-jackstraw_so <- ScoreJackStraw(object = jackstraw_so, 
-                               dims = 1:pc_dims)
+#jackstraw_cells <- sample_cells(labels_order, 100)
 
-pc_pvals <- jackstraw_so@reductions$pca@jackstraw$overall.p.values[,2]
-good_pcs <- pc_pvals < 0.05
+#jackstraw_so <- merged_so[,jackstraw_cells]
 
-pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+#jackstraw_so <- JackStraw(object = jackstraw_so, 
+#                          dims = pc_dims, 
+#                          num.replicate = 50,  #  increase to 96 if run on 96 core?
+#                          verbose = FALSE)
+#jackstraw_so <- ScoreJackStraw(object = jackstraw_so, 
+#                               dims = 1:pc_dims)
 
-nPC <- length(good_pcs)
+#pc_pvals <- jackstraw_so@reductions$pca@jackstraw$overall.p.values[,2]
+#good_pcs <- pc_pvals < 0.05
+
+#nPC <- sum(good_pcs)
+
+#pc_var <- Stdev(merged_so, reduction = "pca")^2
+#total_var <- merged_so@reductions$pca@misc$total.variance
+#var_selected_pc <- sum(pc_var)/total_var
+#cumvar_string <- sprintf(fmt = "%.1f", var_selected_pc*100)
+
+#stm(sprintf("Selected %s pcs, %s explained variation", nPC, cumvar_string))
+
+#pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+
+#stm(sprintf("Using %s principal components for umap",nPC))
+```  
+
+```{r}
+nPC <-  50
 
 pc_var <- Stdev(merged_so, reduction = "pca")^2
 total_var <- merged_so@reductions$pca@misc$total.variance
-var_selected_pc <- sum(pc_var[good_pcs])/total_var
+var_selected_pc <- sum(pc_var)/total_var
 cumvar_string <- sprintf(fmt = "%.1f", var_selected_pc*100)
 
-stm(sprintf("Selected %s pcs, %s explained variation"), nPC, cumvar_string)
+stm(sprintf("Selected %s pcs, %s explained variation", nPC, cumvar_string))
 
 pc_embeddings <- merged_so@reductions$pca@cell.embeddings
 
-stm(sprintf("Using %s principal components for umap",inflectionPoint))
+stm(sprintf("Using %s principal components for umap",nPC))
 ```  
 
 
@@ -1344,13 +1362,12 @@ stm(sprintf("Using %s principal components for umap",inflectionPoint))
 
 ```{r merged_umap}
 # Run UMAP
-stm("Running UMAP on selected coordinates")
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 stm(sprintf("Running UMAP on selected coordinates. Using %s cores", nbrOfWorkers()))
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
 merged_so <- Seurat::RunUMAP(merged_so,
-                                   dims = 1:inflectionPoint,
+                                   dims = 1:nPC,
                                    # umap.method = "umap-learn",
                                    umap.method = "uwot",
                                    seed.use = 3,
@@ -1385,7 +1402,7 @@ if(!all(rownames(umapDF) == colnames(normCounts))){
 
 #### Data Quality UMAP  
 
-Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) from JackStraw selection.  
+Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance).  
 
 ```{r umap_quality,  results = "asis", fig.height = 30, fig.width = 20, class.output = "superbigimage"}
 stm("Plotting Batch UMAP by Data Quality Metrics")
@@ -1804,7 +1821,7 @@ cowplot::plot_grid(aligned_plots[[1]],
   
 ```{r marker_umap,fig.height = 35, fig.width = 25,  class = "superbigimage"}
 stm("Plotting UMAP of marker genes")
-genes <- c("CD3D","CD3E", "CD3G", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
+genes <- c("CD3E", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
            "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R")
 cDF <- normCounts
 # rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
@@ -1870,7 +1887,7 @@ dummy_table %>%
 ```  
 
 ```{r control_label_counts}
-lab_order <- sort(table(all_control$seurat_pbmc_type[all_control$control_type=="old"]), decreasing = TRUE)
+lab_order <- sort(table(all_control$seurat_pbmc_type[all_control$control_type=="reference"]), decreasing = TRUE)
 all_control <- all_control %>% 
   mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = names(lab_order)))
 
@@ -1999,30 +2016,44 @@ sample_cells <- function(cl,
   return(sampled.cells)
 }
 
-jackstraw_cells_ctrl <- sample_cells(ctrl_so$predicted.id, 100)
-jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
+#labels_order_ctrl <- meta$seurat_pbmc_type[meta$barcodes == colnames(merged_so_ctrl)]
+#names(labels_order_ctrl) <- colnames(merged_so_ctrl)
 
-jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
-                          dims = pc_dims, 
-                          num.replicate = 50,  #  increase to 96 if run on 96 core?
-                          verbose = FALSE)
-jackstraw_so_ctrl <- ScoreJackStraw(object = jackstraw_so_ctrl, 
-                               dims = 1:pc_dims)
+#jackstraw_cells_ctrl <- sample_cells(labels_order_ctrl, 100)
+#jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
 
-pc_pvals_ctrl <- jackstraw_so_ctrl@reductions$pca@jackstraw$overall.p.values[,2]
-good_pcs_ctrl <- pc_pvals_ctrl < 0.05
+#jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
+#                          dims = pc_dims, 
+#                          num.replicate = 50,  #  increase to 96 if run on 96 core?
+#                          verbose = FALSE)
+#jackstraw_so_ctrl <- ScoreJackStraw(object = jackstraw_so_ctrl, 
+#                               dims = 1:pc_dims)
 
-pc_embeddings_ctrl <- ctrl_so@reductions$pca@cell.embeddings
+#pc_pvals_ctrl <- jackstraw_so_ctrl@reductions$pca@jackstraw$overall.p.values[,2]
+#good_pcs_ctrl <- pc_pvals_ctrl < 0.05
 
-nPC_ctrl <- length(good_pcs_ctrl)
+#pc_embeddings_ctrl <- ctrl_so@reductions$pca@cell.embeddings
+
+#nPC_ctrl <- sum(good_pcs_ctrl)
+
+#pc_var_ctrl <- Stdev(ctrl_so, reduction = "pca")^2
+#total_var_ctrl <- ctrl_so@reductions$pca@misc$total.variance
+#var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
+#cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
+
+#stm(sprintf("Selected %s pcs, %s explained variation", nPC_ctrl, cumvar_string_ctrl))
+```
+
+```{r}
+nPC_ctrl <-  50
 
 pc_var_ctrl <- Stdev(ctrl_so, reduction = "pca")^2
 total_var_ctrl <- ctrl_so@reductions$pca@misc$total.variance
-var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
+var_selected_pc_ctrl <- sum(pc_var_ctrl)/total_var_ctrl
 cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
 
-stm(sprintf("Selected %s pcs, %s explained variation"), nPC_ctrl, cumvar_string_ctrl)
-```
+stm(sprintf("Selected %s pcs, %s explained variation", nPC_ctrl, cumvar_string_ctrl))
+```  
 
 ```{r elbowplot_pc_selection_ctrl}
 # stm("Determining dimensionality via elbow plot method for control")
@@ -2058,7 +2089,7 @@ stm("Running UMAP on selected coordinates...")
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
 ctrl_so <- Seurat::RunUMAP(ctrl_so,
-                                   dims = 1:inflectionPoint,
+                                   dims = 1:nPC_ctrl,
                                    # umap.method = "umap-learn",
                                    umap.method = "uwot",
                                    seed.use = 3,
@@ -2096,7 +2127,7 @@ max_umi <- max(60000,all_control$n_umis)
 point_size <- 0.4
 
 # Cell Types
-g_base <- ggplot(umapDF_ctrl %>% arrange(-control_type), aes(UMAP_1_merged, UMAP_2_merged)) 
+g_base <- ggplot(umapDF_ctrl %>% arrange(desc(control_type)), aes(UMAP_1_merged, UMAP_2_merged)) 
 
 
 stm("Plotting cell type UMAP")
@@ -2127,7 +2158,7 @@ g2 <- g_base +
 # Control Type
 stm("Plotting Control type UMAP")
 g3 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = control_type), ) +
+  geom_point(alpha = 1, size = point_size, aes(color = control_type)) +
   ggtitle("Control Type")+
   theme_bw()+
   theme(aspect.ratio = 1/1,
