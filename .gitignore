@@ -9,3 +9,4 @@ merged_so_pcaresults.rds
 .hisefilelog.rds
 .ipynb_checkpoints/
 inst/rmarkdown/.ipynb_checkpoints/
+inst/rmarkdown/meta.Rds

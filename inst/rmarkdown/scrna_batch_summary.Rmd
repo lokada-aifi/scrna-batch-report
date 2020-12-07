@@ -64,7 +64,7 @@ quiet_library(future.apply)  # multi-threading for batch umap creation
 
 ```{r variable_definitions}
 control_sample_pattern <- "IMM\\d{2}[_-]\\d{3}"  
-fct_mito_umi_threshold <- 0.05
+fct_mito_umi_threshold <- 0.10
 is_test <- FALSE
 cell_type_palette <- data.frame(
   seurat3_pbmc_type = c("B cell progenitor", "CD14+ Monocytes", "CD16+ Monocytes",
@@ -83,7 +83,7 @@ cell_type_palette <- data.frame(
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   # in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  #in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
    in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
 
   batch <- "T001"
@@ -880,7 +880,7 @@ for (i in seq_along(varnames)){
 dummy_blank <- rep("x",5)
 dummy_table <- data.frame("Specification"=dummy_blank, 
                           "Value"= dummy_blank,
-                          "Comments"=c("","","Warning: message","Fail: mesage",""))
+                          "Comments"=c("","","Warning: message","Fail: message",""))
 dummy_table %>% 
   gt() %>% 
   gt_fmt_comments
@@ -970,7 +970,7 @@ ply_cutoff_pos %>%
 [Return to Top](#top_cell_hashing)  
   
 #### HTO Category Counts by Well  
-```{r hto_cat_counts}
+```{r hto_cat_counts, out.width=fig_width_n_pools, fig.height = 7}
 # hto_cat <- all_meta %>% 
 #   group_by(well_id, pool_id, hto_category) %>% 
 #   summarise(N = n(), .groups = "drop") %>% 
@@ -993,7 +993,7 @@ qc_aligned_barplot_mod(all_meta,
   
     
 #### HTO Category Fraction by Well
-```{r hto_cat_fractions, fig.width = fig_width_n_pools, fig.height = 6}
+```{r hto_cat_fractions, out.width=fig_width_n_pools, fig.height = 6}
 # hto_cat <- all_meta %>% 
 #   group_by(well_id, pool_id, hto_category) %>% 
 #   summarise(N = n(), .groups = "drop") %>% 
@@ -1035,7 +1035,8 @@ for (i in seq_along(pools)){
 
 cowplot::plot_grid(plotlist = plot_list, nrow = 1)
 
-```  
+```   
+[Return to Top](#top_cell_hashing)  
   
 ##### HTO Barcode Fraction per Well Plot  
 
@@ -1051,12 +1052,14 @@ for (i in seq_along(pools)){
                    name_y = "Fraction of Cells",
                    as_fraction = TRUE, 
                    facet_formula = formula("~pool_id"), facet_rows = 1, scales = "free_x") +
-  ggtitle("HTO Barcode Fraction per Well")
+  ggtitle("HTO Barcode Fraction per Well")+
+    theme(text = element_text(size = 12))
 }
 
 cowplot::plot_grid(plotlist = plot_list, nrow = 1)
   
 ```  
+[Return to Top](#top_cell_hashing)  
   
 ##### Well Count per HTO Barcode Plot  
 
@@ -1078,6 +1081,7 @@ cowplot::plot_grid(plotlist = plot_list, nrow = 1)
 
 
 ```  
+[Return to Top](#top_cell_hashing)  
   
 ##### Well Fraction per HTO Barcode Plot  
 ```{r Well Fraction By HTO Barcode Plot, fig.height = 6, fig.width = fig_width_n_pools}
@@ -1130,7 +1134,7 @@ plot_grid(plotlist = reads_violin_list,
 ``` 
   
 [Return to Top](#top_cell_hashing)  
-
+  
 ```{r umi_counts}
 # UMI per category plot
 stm("Generating umi count violin plots")
@@ -1163,7 +1167,7 @@ plot_grid(plotlist = umis_violin_list,
   
 [Return to Top](#top_cell_hashing)  
   
-```{r gene_counts}
+```{r gene_counts }
 # Genes per category plot
 category_genes_violins <- qc_violin_plot(all_meta,
                                          category_x = "hto_category",
@@ -1192,7 +1196,7 @@ plot_grid(plotlist = genes_violin_list,
 [Return to Top](#top_cell_hashing)  
   
 ```{r pct_mito}
-meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.25,0.5,Inf), labels = c("0-0.05","0.1-0.25","0.25-0.5",">0.5"))
+meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf), labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))
 # ggplot(meta, aes(pbmc_sample_id, fct_mito_umi, color = fct_mito_umi > 0.5)) +
 #   geom_point(alpha = 0.2,position = position_jitter(height = 0, width = 0.3, seed = 1)) +
 #   geom_boxplot(color = "black", alpha = 0 , outlier.alpha = 1) +
@@ -1207,7 +1211,9 @@ g_bar <- ggplot(meta, aes(pbmc_sample_pool,  fill = fct_mito_group))+
 plotly::ggplotly(g_bar) %>%
 layout(hovermode = 'compare')
 
-```  
+```   
+  
+[Return to Top](#top_cell_hashing)  
   
 ```{r combine count matrices for all samples}
 stm("Reading and merging all count matrices")
@@ -1247,7 +1253,7 @@ normCounts <- merged_so[["RNA"]]@data
 pc_dims <- min(ncol(merged_so) - 1, 50)
 
 stm("Finding Variable Features")
-
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 merged_so <- FindVariableFeatures(object = merged_so)
 
 stm("Scaling Data")
@@ -1262,47 +1268,87 @@ merged_so <- RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)
  
 ```  
 
+```{r jackstraw_pc_selection}
+stm("Determining dimensionality via jackstraw method")
 
-```{r elbowplot_pc_selection}
-stm("Determining dimensionality via elbow plot method")
+sample_cells <- function(cl, 
+                          sample.size, 
+                          seed = 3030) {
+  cl.cells <- split(names(cl), cl)
+  sampled.cells <- sapply(names(cl.cells), function(x) {
+    cells <- cl.cells[[x]]
+    if (sample.size >= length(cells)) {
+      return(cells)
+    }
+    to.sample <- pmin(sample.size, length(cells))
+    
+    set.seed(seed)
+    sample(cells, to.sample)
+  }, simplify = FALSE)
+  sampled.cells <- unlist(sampled.cells)
+  return(sampled.cells)
+}
 
-# Elbow Method
-pcElbow <- Seurat::ElbowPlot(object = merged_so, reduction = "pca")
+jackstraw_cells <- sample_cells(merged_so$predicted.id, 100)
+jackstraw_so <- merged_so[,jackstraw_cells]
 
-# Find inflection point of the elbow curve
-inflectionPoint <- inflection::ede(x = pcElbow$data$dims,
-                                   y = pcElbow$data$stdev,
-                                   index = 1)[, "j2"]
-pc_var <- Stdev(merged_so, reduction = "pca")^2
-total_var <- merged_so@reductions$pca@misc$total.variance
-cumvar_inflection <- cumsum(pc_var/total_var)[inflectionPoint]
-cumvar_string <- sprintf(fmt = "%.1f", cumvar_inflection*100)
-# p_elbow <- pcElbow +
-#   geom_vline(xintercept = inflectionPoint, col = "red") +
-#   geom_text(x = inflectionPoint, col = "red", y = Inf,
-#             label = sprintf("PC%s: Cum.Prop. Variance = %0.3f", inflectionPoint, round(cumvar[inflectionPoint],3)), 
-#             check_overlap = T, hjust = -0.1, vjust = 1) +
-#   ggtitle(sprintf("PC Elbow Plot"))
-# plot(p_elbow)
+jackstraw_so <- JackStraw(object = jackstraw_so, 
+                          dims = pc_dims, 
+                          num.replicate = 50,  #  increase to 96 if run on 96 core?
+                          verbose = FALSE)
+jackstraw_so <- ScoreJackStraw(object = jackstraw_so, 
+                               dims = 1:pc_dims)
+
+pc_pvals <- jackstraw_so@reductions$pca@jackstraw$overall.p.values[,2]
+good_pcs <- pc_pvals < 0.05
 
 pc_embeddings <- merged_so@reductions$pca@cell.embeddings
-```  
 
-Batch-level UMAP using `r {inflectionPoint}` principal components (`r {cumvar_string}`% explained variance).  
+nPC <- length(good_pcs)
+
+pc_var <- Stdev(merged_so, reduction = "pca")^2
+total_var <- merged_so@reductions$pca@misc$total.variance
+var_selected_pc <- sum(pc_var[good_pcs])/total_var
+cumvar_string <- sprintf(fmt = "%.1f", var_selected_pc*100)
+
+stm(sprintf("Selected %s pcs, %s explained variation"), nPC, cumvar_string)
+
+```
+
+
+```{r elbowplot_pc_selection}
+# stm("Determining dimensionality via elbow plot method")
+# 
+# # Elbow Method
+# pcElbow <- Seurat::ElbowPlot(object = merged_so, reduction = "pca", 50)
+# 
+# # Find inflection point of the elbow curve
+# # inflectionPoint <- inflection::ede(x = pcElbow$data$dims,
+# #                                    y = pcElbow$data$stdev,
+# #                                    index = 1)[, "j2"]
+# # nPC <- inflectionPoint
+# 
+# pc_var <- Stdev(merged_so, reduction = "pca")^2
+# total_var <- merged_so@reductions$pca@misc$total.variance
+# cumvar_inflection <- cumsum(pc_var/total_var)[nPC]
+# cumvar_string <- sprintf(fmt = "%.1f", cumvar_inflection*100)
+# 
+# pc_embeddings <- merged_so@reductions$pca@cell.embeddings
+```  
+ 
 
 ```{r merged_umap}
-
 # Run UMAP
-stm("Running UMAP on selected coordinates...")
+stm("Running UMAP on selected coordinates")
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
-merged_so_elbow <- Seurat::RunUMAP(merged_so,
+merged_so <- Seurat::RunUMAP(merged_so,
                                    dims = 1:inflectionPoint,
                                    # umap.method = "umap-learn",
                                    umap.method = "uwot",
                                    seed.use = 3,
                                    verbose = FALSE)
-# saveRDS(merged_so_elbow, file = "merged_so_elbow.Rds")
+# saveRDS(merged_so, file = "merged_so.Rds")
 ```
 
 ```{r recover_analysis }
@@ -1313,13 +1359,13 @@ merged_so_elbow <- Seurat::RunUMAP(merged_so,
 
 ```{r umap_cleanup}
 # Get UMAP coordinates
-umapDF <- merged_so_elbow[["umap"]]@cell.embeddings %>%
+umapDF <- merged_so[["umap"]]@cell.embeddings %>%
           as.data.frame() %>%
           dplyr::rename(UMAP_1_merged = UMAP_1, UMAP_2_merged = UMAP_2) %>%
           tibble::rownames_to_column(var = "barcodes")
 umapDF <- merge(umapDF, meta, by = "barcodes")
 rownames(umapDF) <- umapDF$barcodes
-umapDF <- umapDF[rownames(merged_so_elbow@"meta.data"), , drop = F]
+umapDF <- umapDF[rownames(merged_so@"meta.data"), , drop = F]
 
 normCounts <- merged_so[["RNA"]]@data
 if(!all(rownames(umapDF) == colnames(normCounts))){
@@ -1330,14 +1376,16 @@ if(!all(rownames(umapDF) == colnames(normCounts))){
 
 #### Data Quality UMAP  
 
-```{r umap_quality,  results = "asis", fig.height = 25, fig.width = 30, class.output = "superbigimage"}
+Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) from JackStraw selection.  
+
+```{r umap_quality,  results = "asis", fig.height = 30, fig.width = 20, class.output = "superbigimage"}
 stm("Plotting Batch UMAP by Data Quality Metrics")
 
 # Gene scaling
 # min_genes <- min(100, meta$n_genes)
 max_genes <- max(8000, meta$n_genes)
 max_umi <- max(60000, meta$n_umis)
-point_size <- 0.1
+point_size <- 0.2
 
 # df <- umapDF
 # x_col <- "UMAP_1_merged"
@@ -1496,9 +1544,10 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[3]],
                    aligned_plots[[4]],
                    aligned_plots[[5]],
-                   ncol = 3)
+                   ncol = 2)
 
-```
+```  
+[Return to Top](#top_cell_hashing)  
 
 
 ### Cell Labeling  
@@ -1522,7 +1571,8 @@ dummy_table %>%
   gt_fmt_comments()
 
 ```  
-
+  
+   
 #### Seurat Labeling Scores  
 
 ```{r cell_labeling, fig.height = 8, fig.width = 20}
@@ -1561,9 +1611,9 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
         axis.title = element_text(size = 20))+
   facet_wrap(~seurat_pbmc_type, scales = "free_y")
 
-``` 
+```  
   
-#### UMAP for all cells  
+#### UMAP All Cells  
 
 ```{r umap_labels,  results = "asis", fig.height = 10, fig.width = 20, class.output = "superbigimage"}
 # Gene scaling
@@ -1576,7 +1626,7 @@ g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged))
 
 stm("Plotting cell type UMAP")
 g1 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type, shape = fct_mito_umi_binary)) +
+  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
   ggtitle("Cell Labels")+
   scale_color_manual(values = cell_type_palette$cell_color, 
                      breaks = cell_type_palette$seurat3_pbmc_type) +
@@ -1584,7 +1634,7 @@ g1 <- g_base +
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20), 
         legend.key.size = unit(1, 'lines'),
-        legend.text = element_text(size = 12)) + 
+        legend.text = element_text(size = 14)) + 
   guides(colour = guide_legend(override.aes = list(size = 3)))
 
 # ggplotly(g1) %>% 
@@ -1599,7 +1649,8 @@ g2 <- g_base +
                         breaks = c(0,0.25,0.5,0.75,1)) +
   theme_bw() +
   theme(aspect.ratio = 1/1,
-        title = element_text(size = 20))
+        title = element_text(size = 20),
+        legend.text = element_text(size = 14))
 
 
 
@@ -1609,73 +1660,95 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
                    ncol = 2)
 
-
-gp1 <- ggplotly(g1) %>%
- layout(legend= list(itemsizing='constant'))
-
-gp2 <- ggplotly(g2) %>% 
- layout(legend= list(itemsizing='constant'))
-
-subplot(gp1, gp2, nrows = 1, margin = 0.05)
-
 ```
 
 [Return to Top](#top_cell_labeling) 
 
-#### UMAP for cells with Fraction Mitochondrial UMI`r {fct_mito_umi_threshold}`  
+#### UMAP by Fraction Mitochondrial UMI
 Removed `r {sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)}` cells (`r {round(sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)/nrow(umapDF)*100,1)}`%)
 
-```{r cell_labeling_lowmito, fig.height = 10, fig.width = 20}
-stm("Plotting Batch UMAP labeling, low fraction mitochondrial reads only")
+```{r cell_labeling_lowmito, fig.height = 20, fig.width = 20}
+stm("Plotting Batch UMAP labeling, by fraction mitochondrial reads")
+g1_mito <- g1 +
+  facet_grid(~fct_mito_umi_binary) +
+  ggtitle("Cell Labels by Fraction Mitochondrial UMI")+
+  theme(strip.text = element_text(size = 18))
 
-umapDF_low_mito <- umapDF %>% 
-  filter(fct_mito_umi <= fct_mito_umi_threshold) 
-umapDF_high_mito <- umapDF %>% 
-  filter(fct_mito_umi >= fct_mito_umi_threshold) 
-# Gene scaling
-# use same gene scaling from plot above
-
-# Cell Types
-g_base_mito <- ggplot(umapDF_low_mito, aes(UMAP_1_merged, UMAP_2_merged)) 
-
-stm("Plotting cell type UMAP")
-g1_mito  <- g_base_mito  +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
-  ggtitle("Cell Labels")+
-  scale_color_manual(values = cell_type_palette$cell_color, 
-                     breaks = cell_type_palette$seurat3_pbmc_type) +
-  theme_bw() +
-  theme(aspect.ratio = 1/1,
-        title = element_text(size = 20), 
-        legend.key.size = unit(1, 'lines'),
-        legend.text = element_text(size = 12)) + 
-  guides(colour = guide_legend(override.aes = list(size = 3)))
+# ggplotly(g1) %>% 
+#  layout(legend= list(itemsizing='constant'))
 
 # Labeling Scores
-stm("Plotting Labeling Score UMAP")
-g2_mito <- g_base_mito +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) +
-  ggtitle("Label Scores")+
-  scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
-                        breaks = c(0,0.25,0.5,0.75,1)) +
-  theme_bw() +
-  theme(aspect.ratio = 1/1,
-        title = element_text(size = 20))
+stm("Plotting Batch UMAP labeling scores, by fraction mitochondrial reads")
+g2_mito <- g2 +
+  facet_grid(~fct_mito_umi_binary) +
+  ggtitle("Cell Label Scores by Fraction Mitochondrial UMI")+
+  theme(strip.text = element_text(size = 18))
 
-aligned_plots_mito <- cowplot::align_plots(g1_mito, g2_mito , align = "hv", axis = "tblr")  # uniform plot sizing 
 
-cowplot::plot_grid(aligned_plots_mito[[1]],
-                   aligned_plots_mito[[2]],
-                   ncol = 2)
+aligned_plots <- cowplot::align_plots(g1_mito, g2_mito, align = "hv", axis = "tblr")  # uniform plot sizing 
+
+cowplot::plot_grid(aligned_plots[[1]],
+                   aligned_plots[[2]],
+                   ncol = 1)
+
+# gp1 <- ggplotly(g1) %>%
+#  layout(legend= list(itemsizing='constant'))
+# 
+# gp2 <- ggplotly(g2) %>% 
+#  layout(legend= list(itemsizing='constant'))
+# 
+# subplot(gp1, gp2, nrows = 1, margin = 0.05)
+
+
+
+# umapDF_low_mito <- umapDF %>% 
+#   filter(fct_mito_umi <= fct_mito_umi_threshold) 
+# umapDF_high_mito <- umapDF %>% 
+#   filter(fct_mito_umi >= fct_mito_umi_threshold) 
+# # Gene scaling
+# # use same gene scaling from plot above
+# 
+# # Cell Types
+# g_base_mito <- ggplot(umapDF_low_mito, aes(UMAP_1_merged, UMAP_2_merged)) 
+# 
+# stm("Plotting cell type UMAP")
+# g1_mito  <- g_base_mito  +
+#   geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
+#   ggtitle("Cell Labels")+
+#   scale_color_manual(values = cell_type_palette$cell_color, 
+#                      breaks = cell_type_palette$seurat3_pbmc_type) +
+#   theme_bw() +
+#   theme(aspect.ratio = 1/1,
+#         title = element_text(size = 20), 
+#         legend.key.size = unit(1, 'lines'),
+#         legend.text = element_text(size = 12)) + 
+#   guides(colour = guide_legend(override.aes = list(size = 3)))
+# 
+# # Labeling Scores
+# stm("Plotting Labeling Score UMAP")
+# g2_mito <- g_base_mito +
+#   geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) +
+#   ggtitle("Label Scores")+
+#   scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
+#                         breaks = c(0,0.25,0.5,0.75,1)) +
+#   theme_bw() +
+#   theme(aspect.ratio = 1/1,
+#         title = element_text(size = 20))
+# 
+# aligned_plots_mito <- cowplot::align_plots(g1_mito, g2_mito , align = "hv", axis = "tblr")  # uniform plot sizing 
+# 
+# cowplot::plot_grid(aligned_plots_mito[[1]],
+#                    aligned_plots_mito[[2]],
+#                    ncol = 2)
 ```  
   
 #### Marker Visualization  
 
-Plotting cells with low fraction mitochondrial counts (<{r fct_mito_umi_threshold)})  
+Plotting cells with low fraction mitochondrial counts (<`r {fct_mito_umi_threshold)}`)  
 
 ```{r marker_umap,fig.height = 35, fig.width = 25,  class = "superbigimage"}
 stm("Plotting UMAP of marker genes")
-genes <- c("CD3E", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
+genes <- c("CD3D","CD3E", "CD3G", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
            "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R")
 cDF <- normCounts
 # rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
@@ -1685,7 +1758,6 @@ markerDF <- t(cDF[genes, ]) %>% as.data.frame()
 umapDF2 <- umapDF[, c("UMAP_1_merged", "UMAP_2_merged","fct_mito_umi")]
 # table(rownames(markerDF) == rownames(umapDF2))
 umapDF2 <- cbind(umapDF2, markerDF) %>% 
-  filter(fct_mito_umi < fct_mito_umi_threshold) %>%  # filter to only 
   tidyr::gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged) 
 umapDF2$gene <- factor(umapDF2$gene, levels = genes)
 
@@ -1715,14 +1787,13 @@ for(G in genes) {
 
 cowplot::plot_grid(plotlist = marker_umap_l, ncol = 3)
 
-```
-
+```  
  
 
 ### Leukopak Control  
 ```{r control_summary}
 all_control <- all_control %>% 
-  mutate(control_type = ifelse(batch_id == batch, "new", "old")) 
+  mutate(control_type = ifelse(batch_id == batch, "new", "reference")) 
 by_control <- all_control %>% 
   group_by(control_type) %>% 
   summarize(n_cells = n(),
@@ -1738,7 +1809,11 @@ dummy_table %>%
 
 ```  
 
-```{r control_proportions}
+```{r control_label_counts}
+lab_order <- sort(table(all_control$seurat_pbmc_type[all_control$control_type=="old"]), decreasing = TRUE)
+all_control <- all_control %>% 
+  mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = names(lab_order)))
+
 ctrl_by_type <- all_control %>% 
   group_by(control_type, seurat_pbmc_type) %>% 
   summarize(N = n(), .groups = "drop") %>% 
@@ -1748,17 +1823,22 @@ ctrl_by_type <- all_control %>%
   arrange(-pct) %>% 
   mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = unique(seurat_pbmc_type)))
 
-ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)))) +
-  geom_bar(aes(fill = control_type)) +
-  theme(axis.text.x = element_text(angle = 90)) +
-  facet_wrap(~control_type, nrow = 2) +
-  ggtitle("Count Cell Types") +
-  ylab("N All Cells") +
-  xlab("Cell Label") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-        text = element_text(size = 12))
+qc_aligned_barplot(meta=all_control, category_x = "seurat_pbmc_type", name_x = "Cell Label",
+                   category_y = "control_type", name_y = "N Cells",colorset_y = "rainbow", category_name = "control_type")
 
+# ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)))) +
+#   geom_bar(aes(fill = control_type)) +
+#   theme(axis.text.x = element_text(angle = 90)) +
+#   facet_wrap(~control_type, nrow = 2) +
+#   ggtitle("Count Cell Types") +
+#   ylab("N All Cells") +
+#   xlab("Cell Label") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+#         text = element_text(size = 12))
+```  
+
+```{r control_pct_counts, fig.width = 10, class.output = "superbigimage"}
 g <- ggplot(ctrl_by_type, aes(seurat_pbmc_type, y = pct)) +
   geom_bar(aes(fill = control_type), position = "dodge", stat = "identity")  +
   ggtitle("Percent Cells by Label") +
@@ -1768,7 +1848,7 @@ g <- ggplot(ctrl_by_type, aes(seurat_pbmc_type, y = pct)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         axis.title.x = element_text(margin = margin(20,0,0,0))) 
 ggplotly(g) %>% 
-  layout(hovermode = "compare")
+  layout(hovermode = "compare")%>% layout(legend = list(x = 0.8, y = 0.9))
 
 
 ```  
@@ -1822,42 +1902,88 @@ stm("Finding Variable Features Control")
 
 ctrl_so <- FindVariableFeatures(object = ctrl_so)
 
-stm("Scaling Data")
+stm("Scaling Data Control")
 ctrl_so <- ScaleData(object = ctrl_so, verbose = FALSE)
 
-stm("Running PCA")
+stm("Running PCA Control")
 ctrl_so <- RunPCA(object = ctrl_so, npcs = pc_dims_ctrl, verbose = FALSE)  
 
 # save pca object
 # saveRDS(ctrl_so, file = "ctrl_so_pcaresults.rds")
 # ctrl_so <- readRDS("ctrl_so_pcaresults.rds")
- 
+
 ```  
 
 
+```{r Jackstraw_ctrl}
+stm("Determining dimensionality via jackstraw method control")
+
+sample_cells <- function(cl, 
+                          sample.size, 
+                          seed = 3030) {
+  cl.cells <- split(names(cl), cl)
+  sampled.cells <- sapply(names(cl.cells), function(x) {
+    cells <- cl.cells[[x]]
+    if (sample.size >= length(cells)) {
+      return(cells)
+    }
+    to.sample <- pmin(sample.size, length(cells))
+    
+    set.seed(seed)
+    sample(cells, to.sample)
+  }, simplify = FALSE)
+  sampled.cells <- unlist(sampled.cells)
+  return(sampled.cells)
+}
+
+jackstraw_cells_ctrl <- sample_cells(ctrl_so$predicted.id, 100)
+jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
+
+jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
+                          dims = pc_dims, 
+                          num.replicate = 50,  #  increase to 96 if run on 96 core?
+                          verbose = FALSE)
+jackstraw_so_ctrl <- ScoreJackStraw(object = jackstraw_so_ctrl, 
+                               dims = 1:pc_dims)
+
+pc_pvals_ctrl <- jackstraw_so_ctrl@reductions$pca@jackstraw$overall.p.values[,2]
+good_pcs_ctrl <- pc_pvals_ctrl < 0.05
+
+pc_embeddings_ctrl <- ctrl_so@reductions$pca@cell.embeddings
+
+nPC_ctrl <- length(good_pcs_ctrl)
+
+pc_var_ctrl <- Stdev(ctrl_so, reduction = "pca")^2
+total_var_ctrl <- ctrl_so@reductions$pca@misc$total.variance
+var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
+cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
+
+stm(sprintf("Selected %s pcs, %s explained variation"), nPC_ctrl, cumvar_string_ctrl)
+```
+
 ```{r elbowplot_pc_selection_ctrl}
-stm("Determining dimensionality via elbow plot method for control")
-
-# Elbow Method
-pcElbow <- Seurat::ElbowPlot(object = ctrl_so, reduction = "pca")
-
-# Find inflection point of the elbow curve
-inflectionPoint <- inflection::ede(x = pcElbow$data$dims,
-                                   y = pcElbow$data$stdev,
-                                   index = 1)[, "j2"]
-pc_var <- Stdev(ctrl_so, reduction = "pca")^2
-total_var <- ctrl_so@reductions$pca@misc$total.variance
-cumvar_inflection <- cumsum(pc_var/total_var)[inflectionPoint]
-cumvar_string <- sprintf(fmt = "%.1f", cumvar_inflection*100)
-# p_elbow <- pcElbow +
-#   geom_vline(xintercept = inflectionPoint, col = "red") +
-#   geom_text(x = inflectionPoint, col = "red", y = Inf,
-#             label = sprintf("PC%s: Cum.Prop. Variance = %0.3f", inflectionPoint, round(cumvar[inflectionPoint],3)), 
-#             check_overlap = T, hjust = -0.1, vjust = 1) +
-#   ggtitle(sprintf("PC Elbow Plot"))
-# plot(p_elbow)
-
-pc_embeddings <- ctrl_so@reductions$pca@cell.embeddings
+# stm("Determining dimensionality via elbow plot method for control")
+# 
+# # Elbow Method
+# pcElbow <- Seurat::ElbowPlot(object = ctrl_so, reduction = "pca")
+# 
+# # Find inflection point of the elbow curve
+# inflectionPoint <- inflection::ede(x = pcElbow$data$dims,
+#                                    y = pcElbow$data$stdev,
+#                                    index = 1)[, "j2"]
+# pc_var <- Stdev(ctrl_so, reduction = "pca")^2
+# total_var <- ctrl_so@reductions$pca@misc$total.variance
+# cumvar_inflection <- cumsum(pc_var/total_var)[inflectionPoint]
+# cumvar_string <- sprintf(fmt = "%.1f", cumvar_inflection*100)
+# # p_elbow <- pcElbow +
+# #   geom_vline(xintercept = inflectionPoint, col = "red") +
+# #   geom_text(x = inflectionPoint, col = "red", y = Inf,
+# #             label = sprintf("PC%s: Cum.Prop. Variance = %0.3f", inflectionPoint, round(cumvar[inflectionPoint],3)), 
+# #             check_overlap = T, hjust = -0.1, vjust = 1) +
+# #   ggtitle(sprintf("PC Elbow Plot"))
+# # plot(p_elbow)
+# 
+# pc_embeddings <- ctrl_so@reductions$pca@cell.embeddings
 ```  
 
 Batch-level UMAP using `r {inflectionPoint}` principal components (`r {cumvar_string}`% explained variance).  
@@ -1867,7 +1993,7 @@ Batch-level UMAP using `r {inflectionPoint}` principal components (`r {cumvar_st
 stm("Running UMAP on selected coordinates...")
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
-ctrl_so_elbow <- Seurat::RunUMAP(ctrl_so,
+ctrl_so <- Seurat::RunUMAP(ctrl_so,
                                    dims = 1:inflectionPoint,
                                    # umap.method = "umap-learn",
                                    umap.method = "uwot",
@@ -1879,13 +2005,13 @@ ctrl_so_elbow <- Seurat::RunUMAP(ctrl_so,
 
 ```{r umap_cleanup_ctrl}
 # Get UMAP coordinates
-umapDF_ctrl <- ctrl_so_elbow[["umap"]]@cell.embeddings %>%
+umapDF_ctrl <- ctrl_so[["umap"]]@cell.embeddings %>%
           as.data.frame() %>%
           dplyr::rename(UMAP_1_merged = UMAP_1, UMAP_2_merged = UMAP_2) %>%
           tibble::rownames_to_column(var = "barcodes")
 umapDF_ctrl <- merge(umapDF_ctrl, all_control, by = "barcodes")
 rownames(umapDF_ctrl) <- umapDF_ctrl$barcodes
-umapDF_ctrl <- umapDF_ctrl[rownames(ctrl_so_elbow@"meta.data"), , drop = F]
+umapDF_ctrl <- umapDF_ctrl[rownames(ctrl_so@"meta.data"), , drop = F]
 
 normCountsctrl <- ctrl_so[["RNA"]]@data
 if(!all(rownames(umapDF_ctrl) == colnames(normCountsctrl))){
@@ -1904,7 +2030,7 @@ max_umi <- max(60000,all_control$n_umis)
 point_size <- 0.4
 
 # Cell Types
-g_base <- ggplot(umapDF_ctrl, aes(UMAP_1_merged, UMAP_2_merged)) 
+g_base <- ggplot(umapDF_ctrl %>% arrange(-control_type), aes(UMAP_1_merged, UMAP_2_merged)) 
 
 
 stm("Plotting cell type UMAP")
@@ -1917,7 +2043,7 @@ g1 <- g_base +
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20), 
         legend.key.size = unit(1, 'lines'),
-        legend.text = element_text(size = 12)) + 
+        legend.text = element_text(size = 14)) + 
   guides(colour = guide_legend(override.aes = list(size = 3)))
 
 # Labeling Scores
@@ -1929,18 +2055,19 @@ g2 <- g_base +
                         breaks = c(0,0.25,0.5,0.75,1)) +
   theme_bw() +
   theme(aspect.ratio = 1/1,
-        title = element_text(size = 20))
+        title = element_text(size = 20),
+        legend.text = element_text(size = 14))
 
 # Control Type
 stm("Plotting Control type UMAP")
 g3 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = control_type)) +
+  geom_point(alpha = 1, size = point_size, aes(color = control_type), ) +
   ggtitle("Control Type")+
   theme_bw()+
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
         legend.key.size = unit(1, 'lines'),
-        legend.text = element_text(size = 12)) +
+        legend.text = element_text(size = 14)) +
   guides(colour = guide_legend(override.aes = list(size = 3)))
 
 aligned_plots <- cowplot::align_plots(g1, g2,g3, align = "hv", axis = "tblr")  # uniform plot sizing 
@@ -1951,7 +2078,7 @@ cowplot::plot_grid(aligned_plots[[1]],
                    ncol = 2)
 
 
-```
+```  
 
 <!-- Batch Summary QC Executed here, referenced in "echo_qc_summary_chunk" above to allow display in first tab -->
 ```{r qc_summary, results = "hide"}
@@ -1959,14 +2086,11 @@ cowplot::plot_grid(aligned_plots[[1]],
 # qcCriteriaLevel <- c("Well", "Well")
 # qcValues <- c("31239 [12312-4153151]", "34.5%")
 
-# final_qc <- data.table(`QC Level` = qcCriteriaLevel, 
-#                        `QC Description` = qcCriteria, 
-#                        Value = qcValues)
 
 qcCriteria <- c("Well Sequencing and Alignment", "Cell Hashing", "Cell Labeling", "Control Sample")
 qcMessage <- c("Warning", "Pass", "Pass", "Pass")
 
-final_qc <- data.table(`Category` = qcCriteria, 
+final_qc <- data.table(Category = qcCriteria, 
                        Results = qcMessage,
                        Description = "                      ")
 
