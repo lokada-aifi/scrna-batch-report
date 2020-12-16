@@ -45,6 +45,7 @@ quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 
+stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))
 ```  
 
 ```{css style_definitions}
@@ -83,11 +84,13 @@ cell_type_palette <- data.frame(
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   # in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
-   # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
+  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
 
   batch <- "T001"
-  in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  #in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
+
 } else {
   in_dir <- params$in_dir
   batch <-  params$batch
@@ -96,7 +99,7 @@ if(is.null(params$in_dir)) {
 }
 
 stm(paste0("IN Batch        : ", batch))
-stm(paste0("INDirectory     : ", in_dir))
+stm(paste0("IN Directory     : ", in_dir))
 stm(paste0("IN Sample Key   : ", in_key))
 # stm(paste0("OUT Cell Label Table: ", out_tbl))
 ```
@@ -593,18 +596,9 @@ stm(paste0("IN Control Labeled H5 Files:\n\t", paste(all_control_h5, collapse = 
 
 ```{r read_key}
 stm("Reading in sample key")
-df_key <- datatable::fread(in_key)
-control_meta <- do.call(rbind, control_meta_list)
-setDT(control_meta)
+df_key <- data.table::fread(in_key)
+#setDT(control_meta)
 
-# TODO: Decide if current control should be in historical control
-run_control <- meta %>%
-  filter(grepl(control_sample_pattern, pbmc_sample_id))
-
-all_control <- rbind(run_control, control_meta) %>% 
-  unique()
-  # dplyr::full_join(multiplet_meta)  # TODO: clean up formatting
-remove("control_meta_list","control_meta")
 ```
 
 ```{r merge_meta}
@@ -709,6 +703,8 @@ all_control[ ,plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
 
 ## Batch Information    
 ```{r batchinfo, include = TRUE}
+stm("Constructing Batch Information table")
+
 # Summarize batch information
 batch <- unique(meta$batch) # assumption is one batch per report
 
@@ -835,6 +831,8 @@ well_summary_table_comments %>%
 #### Plots of Well-Level Metrics  
   
 ```{r well_plots, results = "asis"}
+stm("Generating sequencing and alignment QC plots")
+
 bar_theme <- function(...){
   ggplot2::theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), ...)
 }
@@ -895,6 +893,8 @@ for (i in seq_along(varnames)){
 ```  
 
 ```{r hashing_summary}
+stm("Output cell hashing summary table")
+
 dummy_blank <- rep("x",5)
 dummy_table <- data.frame("Specification"=dummy_blank, 
                           "Value"= dummy_blank,
@@ -911,6 +911,7 @@ fig_width <- n_samples*0.75
 
 #### Pool-based Summary  
 ```{r pool_summary}
+stm("Output pool based summary table")
 pool_summary <- all_meta %>% 
   group_by(hto_category, pool_id) %>% 
   summarize(n_cells = n(),
@@ -948,13 +949,15 @@ pool_summary %>%
   
 #### HTO Assignment Cutoffs  
 
-Hash detected in a well if >`r{5}` cells have any counts. Cells are called positive for a hash if counts are above the calculated cutoff.  
+Hash detected in a well if >`r {5}` cells have any counts. Cells are called positive for a hash if counts are above the calculated cutoff.  
 
 ```{r}
 temp_figwidth <- (n_pools*4 + 2.75)
 ```  
  
 ```{r hto_setup, fig.width = 6, fig.height = 30}
+stm("Formating hto cutoff data")
+
 all_meta_subset <- all_meta %>% 
   dplyr::select(barcodes, well_id, pool_id, hto_barcode, hto_category)
 # log_seq <- function(from, to, length.out = 10){
@@ -1003,6 +1006,8 @@ pools <- unique(all_hash_fmt$pool_id)
 ```
 
 ```{r hto_ridge_hist, fig.width = 10, fig.height = 8}
+stm("Plotting hto count ridgeplots")
+
 # , fig.width = 3, fig.height = 20
 # Censor hto if detected in <= 5 cells in the well
 for (i in seq_along(pools)){
@@ -1043,85 +1048,89 @@ for (i in seq_along(pools)){
 
 
 ```{r hto_violin, fig.width = 10, fig.height = 8}
+#stm("Plotting hto count violin plots")
 # , fig.width = 3, fig.height = 20
 # Censor hto if detected in <= 5 cells in the well
-for (i in seq_along(pools)){
-  df <- all_hash_fmt %>% 
-    filter(pool_id == pools[i]) %>% 
-    filter(count > 0) %>%   # this is the criteria to plot a hash tag in a well
-    mutate(well_id = factor(well_id, levels = sort(unique(well_id))))
-  
-  df_lines <- df %>%
-    select(well_id, sample_hto, hto, cutoff, log_cutoff) %>% 
-    distinct() 
-  
-  g_violin <- ggplot(df, aes(well_id, log_count)) +
-    # geom_segment(data = df_lines, aes(y = log_cutoff, yend = log_cutoff,
-    #                                   x = well_id, xend = well_id), color = "red") +
-    geom_violin(aes(fill = well_id)) +
-    geom_point(data = df_lines, aes(x = well_id, y = log_cutoff), shape = "-", color = "red", size = 5) +
-    scale_y_continuous(limits = c(-.5,max(all_hash_fmt$log_count,na.rm=T))) +
-    geom_text(y= max(all_hash_fmt$log_count,na.rm=T)/2, 
-              aes(x= as.numeric(well_id),label = plot_label), 
-              size = 3, hjust = 0.5, angle = 90, check_overlap = T) +
-    facet_wrap(~sample_hto, ncol = 5) +
-    ggtitle(pools[i]) +
-    theme(axis.text.x = element_text(angle = 90))
-  
-  # suppressMessages(plot(g_ridge))  # suppressing messages on the bandwidths selected for each facet
-  plot(g_violin)
-  
-}
+#for (i in seq_along(pools)){
+#  df <- all_hash_fmt %>% 
+#    filter(pool_id == pools[i]) %>% 
+#   filter(count > 0) %>%   # this is the criteria to plot a hash tag in a well
+#   mutate(well_id = factor(well_id, levels = sort(unique(well_id))))
+#  
+# df_lines <- df %>%
+#    select(well_id, sample_hto, hto, cutoff, log_cutoff) %>% 
+#    distinct() 
+#  
+#  g_violin <- ggplot(df, aes(well_id, log_count)) +
+#    # geom_segment(data = df_lines, aes(y = log_cutoff, yend = log_cutoff,
+#    #                                   x = well_id, xend = well_id), color = "red") +
+#    geom_violin(aes(fill = well_id)) +
+#    geom_point(data = df_lines, aes(x = well_id, y = log_cutoff), shape = "-", color = "red", size = 5) +
+#    scale_y_continuous(limits = c(-.5,max(all_hash_fmt$log_count,na.rm=T))) +
+#    geom_text(y= max(all_hash_fmt$log_count,na.rm=T)/2, 
+#              aes(x= as.numeric(well_id),label = plot_label), 
+#              size = 3, hjust = 0.5, angle = 90, check_overlap = T) +
+#    facet_wrap(~sample_hto, ncol = 5) +
+#    ggtitle(pools[i]) +
+#    theme(axis.text.x = element_text(angle = 90))
+#  
+#  # suppressMessages(plot(g_ridge))  # suppressing messages on the bandwidths selected for each facet
+#  plot(g_violin)
+ # 
+#}
 
 ```  
 
 
-```{r hto_densityplots, fig.width = 6, fig.height = 10}
+```{r hto_densityplots, fig.width = 6, fig.height = 12}
+#stm("Plotting hto count density plots")
 # Censor hto if detected in <= 5 cells in the well
-for (i in seq_along(pools)){
-  df <- all_hash_fmt %>% 
-    filter(pool_id == pools[i]) %>% 
-    filter(count > 0) %>%   # this is the criteria to plot a hash tag in a well
-    mutate(well_id = factor(well_id, levels = sort(unique(well_id))))
-  
-  g_density <- ggplot(df, aes(log_count)) +
-    geom_vline(aes(xintercept = log_cutoff, color = well_id)) +
-    geom_density(aes(color = well_id)) +
-    facet_wrap(~sample_hto, ncol=1, scales = "free_y") +
-    ggtitle(pools[i])
-  plot(g_density)
-}
+#for (i in seq_along(pools)){
+#  df <- all_hash_fmt %>% 
+#    filter(pool_id == pools[i]) %>% 
+#    filter(count > 0) %>%   # this is the criteria to plot a hash tag in a well
+#    mutate(well_id = factor(well_id, levels = sort(unique(well_id))))
+#  
+#  g_density <- ggplot(df, aes(log_count)) +
+#    geom_vline(aes(xintercept = log_cutoff, color = well_id)) +
+#    geom_density(aes(color = well_id)) +
+#    facet_wrap(~sample_hto, ncol=1, scales = "free_y") +
+#    ggtitle(pools[i])
+#  plot(g_density)
+#}
 
 ```  
 
 
 ```{r hto_heatmap, fig.width = 6, fig.height = 40}
-all_hash_fmt_scale <- all_hash_fmt %>% 
-  group_by(well_id, pool_id, hto, log_count_bin) %>% 
-  summarize(N = n(),.groups = "drop") %>% 
-  ungroup() %>% 
-  group_by(well_id, hto) %>% 
-  mutate(mean_group = mean(N),
-         sd_group = sd(N),
-         scaled_n = (N - mean_group)/sd_group) %>% 
-  ungroup() %>% 
-  as.data.frame() %>% 
-  filter(!is.na(log_count_bin))
+#stm("Plotting hto count heatmap plots")
+#all_hash_fmt_scale <- all_hash_fmt %>% 
+#  group_by(well_id, pool_id, hto, log_count_bin) %>% 
+#  summarize(N = n(),.groups = "drop") %>% 
+#  ungroup() %>% 
+#  group_by(well_id, hto) %>% 
+#  mutate(mean_group = mean(N),
+#         sd_group = sd(N),
+#         scaled_n = (N - mean_group)/sd_group) %>% 
+#  ungroup() %>% 
+#  as.data.frame() %>% 
+#  filter(!is.na(log_count_bin))
 
-for (i in seq_along(pools)){
-  g_heatmap <- ggplot(all_hash_fmt_scale %>% filter(pool_id == pools[i]), 
-                      aes(x = log_count_bin, y = factor(well_id), fill = scaled_n))+
-    geom_tile() +
-    facet_grid(hto ~ .,drop = TRUE, switch = "y") +
-    scale_fill_gradientn(colours = c("darkblue","green", "yellow","orange","red","darkred"), na.value = "black") +
-    scale_y_discrete(position = "right") 
-  plot(g_heatmap) 
-}
+#for (i in seq_along(pools)){
+#  g_heatmap <- ggplot(all_hash_fmt_scale %>% filter(pool_id == pools[i]), 
+#                      aes(x = log_count_bin, y = factor(well_id), fill = scaled_n))+
+#    geom_tile() +
+#    facet_grid(hto ~ .,drop = TRUE, switch = "y") +
+#    scale_fill_gradientn(colours = c("darkblue","green", "yellow","orange","red","darkred"), na.value = "black") +
+#    scale_y_discrete(position = "right") 
+#  plot(g_heatmap) 
+#}
 ```  
   
 [Return to Top](#top_cell_hashing) 
   
 ```{r hto_assignment, fig.height = 6, fig.width = temp_figwidth, class.output = "superbigimage"}
+stm("Plotting hto cutoff boxplots")
 g_cutoff_box <- ggplot(well_hto_json_df, aes(sample_hto, cutoff, color = hto_barcode)) +
   suppressWarnings(geom_point(alpha = 0.4, position = position_jitter(height = 0, width = 0.3, seed = 20201112),
              aes(text = sprintf("Well ID: %s",  well_id)))) +
@@ -1142,6 +1151,7 @@ ply_cutoff_box %>%
 [Return to  Top](#top_cell_hashing)  
   
 ```{r hto_pos_cutoff, fig.width = temp_figwidth, fig.height = 6}
+stm("Plotting hto positive call box plots")
 g_cutoff_pos <- ggplot(well_hto_json_df, aes(sample_hto, frac_pos, color = hto_barcode)) +
   suppressWarnings(geom_point(alpha = 0.4, position = position_jitter(height = 0, seed = 20201112),
              aes(text = sprintf("Well ID: %s",  well_id)))) +
@@ -1161,7 +1171,9 @@ ply_cutoff_pos %>%
     
  
 #### HTO Category Counts by Well  
+
 ```{r hto_cat_counts, out.width=fig_width_n_pools, fig.height = 7}
+stm("Plotting hto category counts per well")
 # hto_cat <- all_meta %>% 
 #   group_by(well_id, pool_id, hto_category) %>% 
 #   summarise(N = n(), .groups = "drop") %>% 
@@ -1183,8 +1195,11 @@ qc_aligned_barplot_mod(all_meta,
 [Return to Top](#top_cell_hashing)  
   
     
-#### HTO Category Fraction by Well
+#### HTO Category Fraction by Well  
+
 ```{r hto_cat_fractions, out.width=fig_width_n_pools, fig.height = 6}
+stm("Plotting hto category fraction per well")
+
 # hto_cat <- all_meta %>% 
 #   group_by(well_id, pool_id, hto_category) %>% 
 #   summarise(N = n(), .groups = "drop") %>% 
@@ -1209,6 +1224,8 @@ qc_stacked_barplot_mod(all_meta,
 ##### HTO Barcode Count per Well Plot  
 
 ```{r hto_counts_well,  fig.width = fig_width_n_pools, fig.height = 6, class.output = "superbigimage"}
+stm("Plotting barcode count per well and hto")
+
 plot_list <- list()
 for (i in seq_along(pools)){
   plot_list[[i]] <- qc_aligned_barplot_mod(meta = meta[meta$pool_id == pools[i]],
@@ -1233,6 +1250,8 @@ cowplot::plot_grid(plotlist = plot_list, nrow = 1)
 ##### HTO Barcode Fraction per Well Plot  
 
 ```{r hto_fraction_well,  fig.width = fig_width_n_pools, fig.height = 6}
+stm("Plotting barcode fraction per well and hto")
+
 plot_list <- list()
 for (i in seq_along(pools)){
   plot_list[[i]] <- qc_stacked_barplot_mod(meta = meta[pool_id==pools[i]],
@@ -1257,6 +1276,8 @@ cowplot::plot_grid(plotlist = plot_list, nrow = 1)
 ##### Well Count per HTO Barcode Plot  
 
 ```{r Well Count By HTO Barcode Plot, fig.height = 6, fig.width = fig_width_n_pools}
+stm("Plotting well count per hto")
+
 plot_list <- list()
 for (i in seq_along(pools)){
   plot_list[[i]] <- qc_aligned_barplot_mod(meta = meta[pool_id == pools[i],],
@@ -1279,6 +1300,8 @@ cowplot::plot_grid(plotlist = plot_list, nrow = 1)
   
 ##### Well Fraction per HTO Barcode Plot  
 ```{r Well Fraction By HTO Barcode Plot, fig.height = 6, fig.width = fig_width_n_pools}
+stm("Plotting well fraction per hto")
+
 plot_list <- list()
 for (i in seq_along(pools)){
   plot_list[[i]] <- qc_stacked_barplot_mod(meta = meta[pool_id == pools[i],],
@@ -1463,7 +1486,7 @@ merged_so <- RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)
  
 ```  
 
-```{r jackstraw_pc_selection}
+```{r jackstraw_pc_selection, message = FALSE}
 stm("Determining dimensionality via jackstraw method")
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 sample_cells <- function(cl, 
@@ -1484,7 +1507,7 @@ sample_cells <- function(cl,
   return(sampled.cells)
 }
 
-labels_order <- meta$seurat_pbmc_type[meta$barcodes == colnames(merged_so)]
+labels_order <- meta$seurat_pbmc_type[match(meta$barcodes, colnames(merged_so))]
 names(labels_order) <- colnames(merged_so)
 
 jackstraw_cells <- sample_cells(labels_order, 100, seed = 3030)
@@ -1547,7 +1570,11 @@ future::plan("sequential")
 ```
 
 ```{r cell_cylce}
-merged_so <- CellCycleScoring(merged_so, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+#stm("Determining Cell Cycle Scoring")
+
+#s.genes <- Seurat::cc.genes$s.genes
+#g2m.genes <- Seurat::cc.genes$g2m.genes
+#merged_so <- CellCycleScoring(merged_so, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
 
 ```
 
@@ -1847,6 +1874,8 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
 
 #### UMAP All Cells  
 
+Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance).  
+
 ```{r umap_labels,  results = "asis", fig.height = 10, fig.width = 20, class.output = "superbigimage"}
 # Gene scaling
 max_genes <- max(8000,meta$n_genes)
@@ -1869,9 +1898,6 @@ g1 <- g_base +
         legend.text = element_text(size = 14)) + 
   guides(colour = guide_legend(override.aes = list(size = 3)))
 
-# ggplotly(g1) %>% 
-#  layout(legend= list(itemsizing='constant'))
-
 # Labeling Scores
 stm("Plotting Labeling Score UMAP")
 g2 <- g_base +
@@ -1891,15 +1917,6 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
                    ncol = 2)
 
-# gp1 <- ggplotly(g1) %>%
-#  layout(legend= list(itemsizing='constant'))
-
-# gp2 <- ggplotly(g2) %>% 
-#  layout(legend= list(itemsizing='constant'))
-
-# subplot(gp1, gp2, nrows = 1, margin = 0.05)
-
-
 ```
 
 [Return to Top](#top_cell_labeling) 
@@ -1916,9 +1933,6 @@ g1_mito <- g1 +
   ggtitle("Cell Labels by Fraction Mitochondrial UMI")+
   theme(strip.text = element_text(size = 18))
 
-# ggplotly(g1) %>% 
-#  layout(legend= list(itemsizing='constant'))
-
 # Labeling Scores
 stm("Plotting Batch UMAP labeling scores, by fraction mitochondrial reads")
 g2_mito <- g2 +
@@ -1926,67 +1940,17 @@ g2_mito <- g2 +
   ggtitle("Cell Label Scores by Fraction Mitochondrial UMI")+
   theme(strip.text = element_text(size = 18))
 
-
 aligned_plots <- cowplot::align_plots(g1_mito, g2_mito, align = "hv", axis = "tblr")  # uniform plot sizing 
 
 cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
                    ncol = 1)
 
-# gp1 <- ggplotly(g1) %>%
-#  layout(legend= list(itemsizing='constant'))
-# 
-# gp2 <- ggplotly(g2) %>% 
-#  layout(legend= list(itemsizing='constant'))
-# 
-# subplot(gp1, gp2, nrows = 1, margin = 0.05)
-
-
-
-# umapDF_low_mito <- umapDF %>% 
-#   filter(fct_mito_umi <= fct_mito_umi_threshold) 
-# umapDF_high_mito <- umapDF %>% 
-#   filter(fct_mito_umi >= fct_mito_umi_threshold) 
-# # Gene scaling
-# # use same gene scaling from plot above
-# 
-# # Cell Types
-# g_base_mito <- ggplot(umapDF_low_mito, aes(UMAP_1_merged, UMAP_2_merged)) 
-# 
-# stm("Plotting cell type UMAP")
-# g1_mito  <- g_base_mito  +
-#   geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
-#   ggtitle("Cell Labels")+
-#   scale_color_manual(values = cell_type_palette$cell_color, 
-#                      breaks = cell_type_palette$seurat3_pbmc_type) +
-#   theme_bw() +
-#   theme(aspect.ratio = 1/1,
-#         title = element_text(size = 20), 
-#         legend.key.size = unit(1, 'lines'),
-#         legend.text = element_text(size = 12)) + 
-#   guides(colour = guide_legend(override.aes = list(size = 3)))
-# 
-# # Labeling Scores
-# stm("Plotting Labeling Score UMAP")
-# g2_mito <- g_base_mito +
-#   geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) +
-#   ggtitle("Label Scores")+
-#   scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
-#                         breaks = c(0,0.25,0.5,0.75,1)) +
-#   theme_bw() +
-#   theme(aspect.ratio = 1/1,
-#         title = element_text(size = 20))
-# 
-# aligned_plots_mito <- cowplot::align_plots(g1_mito, g2_mito , align = "hv", axis = "tblr")  # uniform plot sizing 
-# 
-# cowplot::plot_grid(aligned_plots_mito[[1]],
-#                    aligned_plots_mito[[2]],
-#                    ncol = 2)
-```  
+```
 
 [Return to Top](#top_cell_labeling)  
 
-```{r cell_labeling_mito_celltypes, fig.height = 20, fig.width = 20}
+```{r cell_labeling_mito_celltypes, fig.height = 10, fig.width = 20}
 stm("Plotting Batch UMAP labeling scores, by fraction mitochondrial reads")
 summaryScores <- umapDF %>%
   group_by()
@@ -2014,7 +1978,7 @@ label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
   summary_merge <- rbind(summary_all, summary_split) %>%
     mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = label_order))
 
-  ggplot(summary_merge, aes(seurat_pbmc_type, pct, fill = group))+
+  ggplot(summary_merge, aes(factor(seurat_pbmc_type, levels = label_order), pct, fill = group))+
     geom_bar(stat = "identity", position = "dodge")
 }
 
@@ -2026,8 +1990,10 @@ label_scores_mito(umapDF)
   
 ```{r marker_umap,fig.height = 35, fig.width = 25,  class = "superbigimage"}
 stm("Plotting UMAP of marker genes")
-genes <- c("CD3E", "CD4", "CD8A", "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
-           "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R")
+genes <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A", 
+            "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
+           "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
+           "FUT4", "ITGAM","FCGR2B","FCER1A")
 cDF <- normCounts
 # rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
 
@@ -2200,7 +2166,7 @@ ctrl_so <- RunPCA(object = ctrl_so, npcs = pc_dims_ctrl, verbose = FALSE)
 ```  
 
 
-```{r Jackstraw_ctrl}
+```{r Jackstraw_ctrl, message = FALSE}
 stm("Determining dimensionality via jackstraw method control")
 
 sample_cells <- function(cl, 
@@ -2221,71 +2187,35 @@ sample_cells <- function(cl,
   return(sampled.cells)
 }
 
-#labels_order_ctrl <- meta$seurat_pbmc_type[meta$barcodes == colnames(merged_so_ctrl)]
-#names(labels_order_ctrl) <- colnames(merged_so_ctrl)
+labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
+names(labels_order_ctrl) <- colnames(ctrl_so)
 
-#jackstraw_cells_ctrl <- sample_cells(labels_order_ctrl, 100)
-#jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
+jackstraw_cells_ctrl <- sample_cells(labels_order_ctrl, 100)
+jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
 
-#jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
-#                          dims = pc_dims, 
-#                          num.replicate = 50,  #  increase to 96 if run on 96 core?
-#                          verbose = FALSE)
-#jackstraw_so_ctrl <- ScoreJackStraw(object = jackstraw_so_ctrl, 
-#                               dims = 1:pc_dims)
+jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
+                          dims = pc_dims, 
+                          num.replicate = 50,  #  increase to 96 if run on 96 core?
+                          verbose = FALSE)
+jackstraw_so_ctrl <- ScoreJackStraw(object = jackstraw_so_ctrl, 
+                               dims = 1:pc_dims)
 
-#pc_pvals_ctrl <- jackstraw_so_ctrl@reductions$pca@jackstraw$overall.p.values[,2]
-#good_pcs_ctrl <- pc_pvals_ctrl < 0.05
+pc_pvals_ctrl <- jackstraw_so_ctrl@reductions$pca@jackstraw$overall.p.values[,2]
+good_pcs_ctrl <- pc_pvals_ctrl < 0.05
 
-#pc_embeddings_ctrl <- ctrl_so@reductions$pca@cell.embeddings
+pc_embeddings_ctrl <- ctrl_so@reductions$pca@cell.embeddings
 
-#nPC_ctrl <- sum(good_pcs_ctrl)
-
-#pc_var_ctrl <- Stdev(ctrl_so, reduction = "pca")^2
-#total_var_ctrl <- ctrl_so@reductions$pca@misc$total.variance
-#var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
-#cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
-
-#stm(sprintf("Selected %s pcs, %s explained variation", nPC_ctrl, cumvar_string_ctrl))
-```
-
-```{r}
-nPC_ctrl <-  50
+nPC_ctrl <- sum(good_pcs_ctrl)
 
 pc_var_ctrl <- Stdev(ctrl_so, reduction = "pca")^2
 total_var_ctrl <- ctrl_so@reductions$pca@misc$total.variance
-var_selected_pc_ctrl <- sum(pc_var_ctrl)/total_var_ctrl
+var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
 cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
 
-stm(sprintf("Selected %s pcs, %s explained variation", nPC_ctrl, cumvar_string_ctrl))
-```  
+stm(sprintf("Selected %s significant pcs via jackstraw, %s explained variation", nPC_ctrl, cumvar_string_ctrl))
+```
 
-```{r elbowplot_pc_selection_ctrl}
-# stm("Determining dimensionality via elbow plot method for control")
-# 
-# # Elbow Method
-# pcElbow <- Seurat::ElbowPlot(object = ctrl_so, reduction = "pca")
-# 
-# # Find inflection point of the elbow curve
-# inflectionPoint <- inflection::ede(x = pcElbow$data$dims,
-#                                    y = pcElbow$data$stdev,
-#                                    index = 1)[, "j2"]
-# pc_var <- Stdev(ctrl_so, reduction = "pca")^2
-# total_var <- ctrl_so@reductions$pca@misc$total.variance
-# cumvar_inflection <- cumsum(pc_var/total_var)[inflectionPoint]
-# cumvar_string <- sprintf(fmt = "%.1f", cumvar_inflection*100)
-# # p_elbow <- pcElbow +
-# #   geom_vline(xintercept = inflectionPoint, col = "red") +
-# #   geom_text(x = inflectionPoint, col = "red", y = Inf,
-# #             label = sprintf("PC%s: Cum.Prop. Variance = %0.3f", inflectionPoint, round(cumvar[inflectionPoint],3)), 
-# #             check_overlap = T, hjust = -0.1, vjust = 1) +
-# #   ggtitle(sprintf("PC Elbow Plot"))
-# # plot(p_elbow)
-# 
-# pc_embeddings <- ctrl_so@reductions$pca@cell.embeddings
-```  
-
-Batch-level UMAP using `r {nPC_ctrl}` principal components (`r {cumvar_string_ctrl}`% explained variance).  
+Batch Control UMAP using `r {nPC_ctrl}` principal components (`r {cumvar_string_ctrl}`% explained variance).  
 
 ```{r merged_umap_ctrl}
 # Run UMAP
@@ -2294,7 +2224,7 @@ stm("Running UMAP on selected coordinates...")
 ## As the number of dimensions, use the same PCs as input to the clustering analysis
 
 ctrl_so <- Seurat::RunUMAP(ctrl_so,
-                                   dims = 1:nPC_ctrl,
+                                   dims = c(1:50)[good_pcs_ctrl],
                                    # umap.method = "umap-learn",
                                    umap.method = "uwot",
                                    seed.use = 3,
@@ -2322,7 +2252,7 @@ if(!all(rownames(umapDF_ctrl) == colnames(normCountsctrl))){
 
 ```   
 
-```{r umap_quality_ctrl,  results = "asis", fig.height = 20, fig.width = 30, class.output = "superbigimage"}
+```{r umap_quality_ctrl,  results = "asis", fig.height = 20, fig.width = 20, class.output = "superbigimage"}
 stm("Plotting Control UMAP by Data Quality Metrics")
 
 # Gene scaling
@@ -2452,7 +2382,7 @@ time_message <- paste0("Elapsed Time: ",
                        " ", units(diff_time))
 print(time_message)
 stm(time_message)
-stm("H5 merge process complete.")
+stm("Batch report process complete.")
 ```  
 
 [Return to Top](#top_session_info)
