@@ -332,7 +332,7 @@ qc_stacked_barplot_mod <- function (meta, category_x = "batch_id", name_x = "Bat
   assertthat::assert_that(colorset_y %in% c("rainbow", "varibow"))
   assertthat::assert_that(class(as_fraction) == "logical")
   assertthat::assert_that(length(as_fraction) == 1)
-  assertthat::assert_that(is.null(facet_formula) || is_formula(facet_formula))
+  assertthat::assert_that(is.null(facet_formula) || rlang::is_formula(facet_formula))
   meta <- as.data.table(meta)
   
   if(!is.null(facet_formula)){
@@ -1119,7 +1119,7 @@ make_subchunk(ply_cutoff_box, subchunk_name = "hto_assignment_subchunk",
   
 [Return to  Top](#top_cell_hashing)  
   
-```{r hto_pos_cutoff, fig.width = temp_figwidth, fig.height = 6}
+```{r hto_pos_cutoff, results = "asis"}
 stm("Plotting hto positive call box plots")
 g_cutoff_pos <- ggplot(well_hto_json_df, aes(sample_hto, frac_pos, color = hto_barcode)) +
   suppressWarnings(geom_point(alpha = 0.4, position = position_jitter(height = 0, seed = 20201112),
@@ -1148,7 +1148,7 @@ make_subchunk(ply_cutoff_pos, subchunk_name = "hto_positive_subchunk",
  
 #### HTO Category Counts by Well  
 
-```{r hto_cat_counts, fig.width = fig_width_n_pools, fig.height = 7}
+```{r hto_cat_counts, fig.width = fig_width_n_pools, fig.height = 7, results = "asis"}
 stm("Plotting hto category counts per well")
 # hto_cat <- all_meta %>% 
 #   group_by(well_id, pool_id, hto_category) %>% 
@@ -1182,13 +1182,9 @@ make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk",
 temp_figwidth <- (n_pools*4 + 2.75)
 ```  
 
-```{r hto_cat_fractions, out.width=fig_width_n_pools, fig.height = 6}
+```{r hto_cat_fractions, fig.width=fig_width_n_pools, fig.height = 6}
 stm("Plotting hto category fraction per well")
 
-# hto_cat <- all_meta %>% 
-#   group_by(well_id, pool_id, hto_category) %>% 
-#   summarise(N = n(), .groups = "drop") %>% 
-#   tidyr::spread(key = hto_category, value = N) 
 qc_stacked_barplot_mod(all_meta,
                        category_x = "well_id",
                        name_x = "Well ID",
@@ -1516,7 +1512,7 @@ total_var <- merged_so@reductions$pca@misc$total.variance
 var_selected_pc <- sum(pc_var[good_pcs])/total_var
 cumvar_string <- sprintf(fmt = "%.1f", var_selected_pc*100)
 
-stm(sprintf("Selected %s significant pcs via JackStraw, %s explained variation", nPC, cumvar_string))
+stm(sprintf("Selected %s significant pcs via JackStraw, %s%% explained variation", nPC, cumvar_string))
 
 pc_embeddings <- merged_so@reductions$pca@cell.embeddings
 
@@ -1555,11 +1551,11 @@ future::plan("sequential")
 ```
 
 ```{r cell_cylce}
-#stm("Determining Cell Cycle Scoring")
+stm("Determining Cell Cycle Scoring")
 
-#s.genes <- Seurat::cc.genes$s.genes
-#g2m.genes <- Seurat::cc.genes$g2m.genes
-#merged_so <- CellCycleScoring(merged_so, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+s.genes <- Seurat::cc.genes$s.genes
+g2m.genes <- Seurat::cc.genes$g2m.genes
+merged_so <- CellCycleScoring(merged_so, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
 
 ```
 
@@ -1646,7 +1642,6 @@ scale_color_fct_mito <- function(...){
   
 }
 
-# theme_gradient <- 
 
 # Cell Types
 g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged)) 
@@ -1935,6 +1930,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 [Return to Top](#top_cell_labeling)  
 
+#### Cell Types by Fraction Mitochondrial Read Group
 ```{r cell_labeling_mito_celltypes, fig.height = 10, fig.width = 20}
 stm("Plotting Batch UMAP labeling scores, by fraction mitochondrial reads")
 summaryScores <- umapDF %>%
@@ -1964,7 +1960,8 @@ label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
     mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = label_order))
 
   ggplot(summary_merge, aes(factor(seurat_pbmc_type, levels = label_order), pct, fill = group))+
-    geom_bar(stat = "identity", position = "dodge")
+    geom_bar(stat = "identity", position = "dodge") +
+    theme(text = element_text(size = 14))
 }
 
 label_scores_mito(umapDF)
@@ -2197,7 +2194,7 @@ total_var_ctrl <- ctrl_so@reductions$pca@misc$total.variance
 var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
 cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
 
-stm(sprintf("Selected %s significant pcs via jackstraw, %s explained variation", nPC_ctrl, cumvar_string_ctrl))
+stm(sprintf("Selected %s significant pcs via jackstraw, %s%% explained variation", nPC_ctrl, cumvar_string_ctrl))
 ```
 
 Batch Control UMAP using `r {nPC_ctrl}` principal components (`r {cumvar_string_ctrl}`% explained variance).  
