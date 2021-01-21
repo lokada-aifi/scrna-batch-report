@@ -77,7 +77,10 @@ cell_type_palette <- data.frame(
                  "#DCF0B1"), 
   stringsAsFactors = FALSE
 )
-hto_category_order <- c()
+  
+par_mb_limit <- 1000
+options('future.globals.maxSize' = par_mb_limit*1024^2)
+
 ```
 
 <!-- Argument parsing --------------------------------------------------------->
@@ -1553,10 +1556,12 @@ future::plan("sequential")
 ```{r cell_cylce}
 stm("Determining Cell Cycle Scoring")
 
-s.genes <- Seurat::cc.genes$s.genes
-g2m.genes <- Seurat::cc.genes$g2m.genes
+s.genes <- Seurat::cc.genes.updated.2019$s.genes
+g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
 merged_so <- CellCycleScoring(merged_so, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
 
+df_cc <- merged_so[[]][,c("S.Score", "G2M.Score","Phase")] %>%
+    tibble::rownames_to_column("barcodes")
 ```
 
 ```{r recover_analysis }
@@ -1572,7 +1577,9 @@ umapDF <- merged_so[["umap"]]@cell.embeddings %>%
           dplyr::rename(UMAP_1_merged = UMAP_1, UMAP_2_merged = UMAP_2) %>%
           tibble::rownames_to_column(var = "barcodes")
 umapDF <- merge(umapDF, meta, by = "barcodes")
+umapDF <- merge(umapDF, df_cc, by = "barcodes")
 rownames(umapDF) <- umapDF$barcodes
+
 umapDF <- umapDF[rownames(merged_so@"meta.data"), , drop = F]
 
 normCounts <- merged_so[["RNA"]]@data
@@ -1856,10 +1863,7 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
 
 Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance).  
 
-```{r umap_labels,  results = "asis", fig.height = 10, fig.width = 20, class.output = "superbigimage"}
-# Gene scaling
-max_genes <- max(8000,meta$n_genes)
-max_umi <- max(60000,meta$n_umis)
+```{r umap_labels,  esults = "asis", fig.height = 22, fig.width = 20, class.output = "superbigimage"}
 point_size <- 0.2
 
 # Cell Types
@@ -1890,12 +1894,48 @@ g2 <- g_base +
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
 
+# Cell Cycle Scores
+stm("Plotting Cell Cycle Score UMAP")
+g3  <- ggplot(umapDF %>% filter(Phase == "G1"), aes(UMAP_1_merged, UMAP_2_merged))  +
+  geom_point(alpha = 0.3, size = point_size, color = "blue") +
+  ggtitle("G1 Cells")+
+  theme_bw() +
+  theme(aspect.ratio = 1/1,
+        title = element_text(size = 20),
+        legend.text = element_text(size = 14))
+        
+stm("Plotting Cell Cycle Score UMAP")
+g4  <- ggplot(umapDF %>% filter(Phase == "S"), aes(UMAP_1_merged, UMAP_2_merged))  +
+  geom_point(alpha = 0.3, size = point_size, color = "forestgreen") +
+  ggtitle("S Cells")+
+  theme_bw() +
+  theme(aspect.ratio = 1/1,
+        title = element_text(size = 20),
+        legend.text = element_text(size = 14))
+stm("Plotting Cell Cycle Score UMAP")
+g5  <- ggplot(umapDF %>% filter(Phase == "G2M"), aes(UMAP_1_merged, UMAP_2_merged))  +
+  geom_point(alpha = 0.3, size = point_size, color = "orange") +
+  ggtitle("G2M Cells")+
+  theme_bw() +
+  theme(aspect.ratio = 1/1,
+        title = element_text(size = 20),
+        legend.text = element_text(size = 14))
 
-aligned_plots <- cowplot::align_plots(g1, g2, align = "hv", axis = "tblr")  # uniform plot sizing 
+
+aligned_plots <- cowplot::align_plots(g1, g2, g3, g4, g5, align = "hv", axis = "tblr")  # uniform plot sizing 
 
 cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
+                   aligned_plots[[3]],
+                   aligned_plots[[4]],
+                   aligned_plots[[5]],
                    ncol = 2)
+
+# aligned_plots <- cowplot::align_plots(g1, g2, align = "hv", axis = "tblr")  # uniform plot sizing 
+
+# cowplot::plot_grid(aligned_plots[[1]],
+#                    aligned_plots[[2]],
+#                   ncol = 2)
 
 ```
 
@@ -2011,7 +2051,7 @@ for(G in genes) {
 
 
 
-cowplot::plot_grid(plotlist = marker_umap_l, ncol = 3)
+cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
 ```  
 
