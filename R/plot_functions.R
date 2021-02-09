@@ -289,4 +289,44 @@ adjust_axis_title_spacing_plotly <- function(plotly_obj, axis, adjustment){
   return(plotly_obj)
 }
 
-rna_seq_well_summary <- function(well_info_df, )
+#' 
+plot_umap_report <- function(df, x_col, x_lab, y_col, y_lab, title, point_size, color_col, scale_color_fun,...){
+  g <- ggplot(df, aes_string(x_col, y_col)) + 
+    geom_point(alpha = 1, size = point_size, aes_string(color = color_col)) +
+    ggtitle(title)+
+    xlab(x_lab) +
+    ylab(y_lab) +
+    scale_color_fun() +
+    theme_bw() +
+    theme(aspect.ratio = 1/1,
+          text = element_text(size = 20))
+  return(g)
+  
+} 
+
+scale_color_genes <- function(max_genes){
+  function(...){
+    scale_color_gradientn(limits = c(0, max_genes),
+                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
+                          values = scales::rescale(c(0,500, 1000, 2000, 3000, 4000, max_genes),
+                                                   from = c(0, max_genes)),
+                          breaks = c(0,2000,4000,6000,8000), ...)
+  }
+}
+
+scale_color_umis <- function(max_umi){
+  function(...){
+    scale_color_gradientn(limits = c(0, max_umi),
+                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
+                          values = scales::rescale(c(0,1000, 3000, 5000, 7500, 10000, max_umi),
+                                                   from = c(0, max_umi)), ...)
+  }
+}
+
+scale_color_fct_mito <- function(...){
+  scale_color_gradientn(limits = c(0,1),
+                       colors = c("blue", "green3","yellow","red"), 
+                       breaks = c(0,0.25,0.5,0.75,1),...)
+  
+  
+}

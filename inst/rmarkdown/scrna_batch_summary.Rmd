@@ -24,7 +24,7 @@ start_time <- Sys.time()
 
 options(warn = 1)  # output warnings as they appear for traceability in stdout/stderr record
 
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE) # warnings will go to console
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE) # warnings will go to console
 
 # TODO: add this function to rmarkdown utility functions
 quiet_library <- function(...) {
@@ -46,8 +46,8 @@ quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 
-for(i in dir("~/Packages/scrna-batch-report/R", full.names = T)) source(i)  ## UPDATE THIS WHEN PACKAGE IS MADE
-# for(i in dir("/home/jupyter/scrna-batch-report/R", full.names = T)) source(i) 
+#for(i in dir("~/Packages/scrna-batch-report/R", full.names = T)) source(i)  ## UPDATE THIS WHEN PACKAGE IS MADE
+for(i in dir("/home/jupyter/scrna-batch-report/R", full.names = T)) source(i) 
 
 stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))
 ```  
@@ -82,7 +82,7 @@ cell_type_palette <- data.frame(
   stringsAsFactors = FALSE
 )
   
-par_mb_limit <- 1000
+par_mb_limit <- 50000
 options('future.globals.maxSize' = par_mb_limit*1024^2)
 
 ```
@@ -91,12 +91,12 @@ options('future.globals.maxSize' = par_mb_limit*1024^2)
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   # in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
-  # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
+  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
 
   batch <- "T001"
-  in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
-  # in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  #in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
 
 } else {
   in_dir <- params$in_dir
@@ -126,13 +126,12 @@ stm(paste0("IN Control Labeled H5 Files:\n\t", paste(all_control_h5, collapse = 
 
 ```
 
-```{r read_key}
+```{r read_key, include = FALSE}
 stm("Reading in sample key")
 df_key <- data.table::fread(in_key)
 
 assertthat::assert_that(length(unique(df_key$BatchID)) == 1)
 assertthat::assert_that(batch == unique(df_key$BatchID))
-#setDT(control_meta)
 
 ```
 
@@ -335,7 +334,8 @@ well_summary_table <- data.frame(Category = factor(vartypes, levels = c("Cells",
                                  Spec = vnames, 
                                  Median = well_info_median,
                                  Range = well_info_range,
-                                 Inter_Well_CV = well_info_cv) %>% 
+                                 Inter_Well_CV = well_info_cv, 
+                                 Plot = sprintf("[Plot](#%s)", vnames)) %>% 
   arrange(Category, Spec) %>% 
   group_by(Category)
 # well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
@@ -344,7 +344,7 @@ set.seed(1105)
 dummycomments <- sample(c("","Warning: message","Fail: message"),
                         size = nrow(well_summary_table_comments), 
                         replace=T, prob = c(0.85,0.12,0.03))
-well_summary_table_comments$Plot <- sprintf("[Plot](#%s)", varnames)  # hyperlink format
+# well_summary_table_comments$Plot <- sprintf("[Plot](#%s)", vnames)  # hyperlink format
 
 
 well_summary_table_comments %>% 
@@ -370,9 +370,9 @@ bar_theme <- function(...){
 verpal <- hcl.colors(n = n_vars, palette = "viridis")
 
 # Plots
-for (i in seq_along(varnames)){
+for (i in seq_along(vnames)){
   df <- data.table::copy(well_info)
-  spec <- varnames[i]
+  spec <- vnames[i]
   # spec_lab <- well_spec_labels[i]
   df <- as.data.frame(df)
   df$spec_col <- df[,spec]
@@ -648,7 +648,7 @@ g_cutoff_pos <- ggplot(well_hto_json_df, aes(sample_hto, frac_pos, color = hto_b
   ggtitle("Fraction Positive HTO Calls per Well")
 
 ply_cutoff_pos <- plotly::ggplotly(g_cutoff_pos) %>%
-  adjust_axis_title_spacing_plotly("x", adjustment = -0.6) %>%
+  adjust_axis_title_spacing_plotly("x", adjustment = -0.2) %>%
   adjust_axis_title_spacing_plotly("y", adjustment = -0.08)
 
 temp_figwidth <- (4*((n_pools>1)+1) + 3)
@@ -1072,7 +1072,7 @@ saveRDS(merged_so, file = "merged_so.Rds")
 future::plan("sequential")
 ```
 
-```{r cell_cylce}
+```{r cell_cycle}
 stm("Determining Cell Cycle Scoring")
 
 s.genes <- Seurat::cc.genes.updated.2019$s.genes
@@ -1127,46 +1127,7 @@ point_size <- 0.2
 # color_col = "fct_mito_umi"
 # scale_color_fun <- scale_color_gradientn
 
-plot_umap_report <- function(df, x_col, x_lab, y_col, y_lab, title, point_size, color_col, scale_color_fun,...){
-  g <- ggplot(df, aes_string(x_col, y_col)) + 
-    geom_point(alpha = 1, size = point_size, aes_string(color = color_col)) +
-    ggtitle(title)+
-    xlab(x_lab) +
-    ylab(y_lab) +
-    scale_color_fun() +
-    theme_bw() +
-    theme(aspect.ratio = 1/1,
-          text = element_text(size = 20))
-  return(g)
-  
-} 
 
-scale_color_genes <- function(max_genes){
-  function(...){
-    scale_color_gradientn(limits = c(0, max_genes),
-                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
-                          values = scales::rescale(c(0,500, 1000, 2000, 3000, 4000, max_genes),
-                                                   from = c(0, max_genes)),
-                          breaks = c(0,2000,4000,6000,8000), ...)
-  }
-}
-
-scale_color_umis <- function(max_umi){
-  function(...){
-    scale_color_gradientn(limits = c(0, max_umi),
-                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
-                          values = scales::rescale(c(0,1000, 3000, 5000, 7500, 10000, max_umi),
-                                                   from = c(0, max_umi)), ...)
-  }
-}
-
-scale_color_fct_mito <- function(...){
-  scale_color_gradientn(limits = c(0,1),
-                       colors = c("blue", "green3","yellow","red"), 
-                       breaks = c(0,0.25,0.5,0.75,1),...)
-  
-  
-}
 
 
 # Cell Types
@@ -1230,7 +1191,6 @@ g5 <- plot_umap_report(df = umapDF,
                  color_col = "n_umis",
                  scale_color_fun = scale_color_umis(max_umi)
 )
-
 
 # g5 <- g_base +
 #   geom_point(alpha = 1, size = point_size, aes(color = n_umis)) +
