@@ -13,24 +13,25 @@ params:
   batch: NULL
   in_dir: NULL
   in_key: NULL
+  in_param: NULL
+  multithreaded: NULL
   out_dir: NULL
 ---
 
-<!-- Set Up ---------------------------------------------------------------- -->
 ```{r setup, echo = FALSE, include = TRUE}
 # Load Libraries  
 start_time <- Sys.time()
 
 options(warn = 1)  # output warnings as they appear for traceability in stdout/stderr record
 
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE) # warnings will go to console
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE) # warnings will go to console
 
 # TODO: add this function to rmarkdown utility functions
 quiet_library <- function(...) {
   suppressPackageStartupMessages(library(...))
 }
 
-quiet_library(Matrix)        # dependency pf H5weaver
+quiet_library(Matrix)        # dependency of H5weaver
 quiet_library(rhdf5)         # dependency of H5weaver
 quiet_library(H5weaver)      # aifi package
 quiet_library(HTOparser)     # aifi package
@@ -45,7 +46,8 @@ quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 
-
+for(i in dir("~/Packages/scrna-batch-report/R", full.names = T)) source(i)  ## UPDATE THIS WHEN PACKAGE IS MADE
+# for(i in dir("/home/jupyter/scrna-batch-report/R", full.names = T)) source(i) 
 
 stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))
 ```  
@@ -89,12 +91,12 @@ options('future.globals.maxSize' = par_mb_limit*1024^2)
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   # in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
-  in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
+  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
 
   batch <- "T001"
-  #in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
-  in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  # in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
 
 } else {
   in_dir <- params$in_dir
@@ -108,27 +110,6 @@ stm(paste0("IN Directory     : ", in_dir))
 stm(paste0("IN Sample Key   : ", in_key))
 # stm(paste0("OUT Cell Label Table: ", out_tbl))
 ```  
-
-```{r functions}
-
-# determine_passing_spec <- function(values, lower_threshold = NULL, upper_threshold = NULL, digits_round = 0, pass_at_threshold = TRUE){
-#   assertthat::assert_that(mode(values) == "numeric")
-#   assertthat::assert_that(length(values) >= 1)
-#   
-#   values_round <- round(values, digits_round)
-#   
-#   if(!is.null(lower_threshold)){
-#     i_low <- which(values <= )
-#   }
-#   
-#   if(pass_at_threshold){
-#     i_low <- which(values_round < lower_threshold)
-#   }
-# 
-# }
-
-```
-
 
 <!-- Parse Input ----------------------------------------------------------- -->
 ```{r find_files}
@@ -148,6 +129,9 @@ stm(paste0("IN Control Labeled H5 Files:\n\t", paste(all_control_h5, collapse = 
 ```{r read_key}
 stm("Reading in sample key")
 df_key <- data.table::fread(in_key)
+
+assertthat::assert_that(length(unique(df_key$BatchID)) == 1)
+assertthat::assert_that(batch == unique(df_key$BatchID))
 #setDT(control_meta)
 
 ```
@@ -174,6 +158,7 @@ stm("Reading in labeled h5 file well data")
 well_list <- future_lapply(all_labeled_h5, read_h5_well_meta)
 well_info <- unique(do.call(rbind, well_list))
 setDT(well_info)
+well_info[, pool_id := gsub("C\\d+W\\d+", "", well_id)]
 
 remove("well_list")
 ```  
@@ -181,7 +166,7 @@ remove("well_list")
 ```{r read_json}
 # Read in json files
 stm("Reading in hto processing metrics json files")
-well_hto_json_list <- future_lapply(all_hto_json,read_hto_well_json)
+well_hto_json_list <- future_lapply(all_hto_json, read_hto_well_json)
 well_hto_json_df <- do.call(rbind, well_hto_json_list)
 well_hto_json_df <- well_hto_json_df %>% 
   dplyr::mutate(sample_hto = paste(hto_barcode, pbmc_sample_id, sep = "\n")) %>% 
@@ -199,7 +184,6 @@ multiplet_meta_list <- future_lapply(all_multiplet_h5, read_h5_cell_meta)
 multiplet_meta <- do.call(rbind, multiplet_meta_list)
 setDT(multiplet_meta)
 all_meta <- merge(meta, multiplet_meta, all = TRUE) 
-  # dplyr::full_join(multiplet_meta)  # TODO: clean up formatting
 remove("multiplet_meta_list","multiplet_meta")
 ```  
 
@@ -239,21 +223,21 @@ meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                          paste0(">",fct_mito_umi_threshold),
                                          paste0("<=",fct_mito_umi_threshold)))]
-meta[ ,pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-meta[ ,plot_barcode:= sprintf("%s\n%s", hto_barcode, pbmc_sample_pool)]
+meta[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
+meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, pbmc_sample_pool)]
 
 
 all_meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 all_meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                              paste0(">",fct_mito_umi_threshold),
                                              paste0("<=",fct_mito_umi_threshold)))]
-all_meta[ ,pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-all_meta[ ,plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
-
+all_meta[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
+all_meta[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
+all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
 
 all_control[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
-all_control[ ,pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-all_control[ ,plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
+all_control[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
+all_control[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
 ```
 
 ## Batch Information    
@@ -261,22 +245,17 @@ all_control[ ,plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
 stm("Constructing Batch Information table")
 
 # Summarize batch information
-batch <- unique(meta$batch) # assumption is one batch per report
-
-pools <- unique(meta$pool_id)
+pools <- unique(df_key$PoolID)
 n_pools <- length(pools)
 
-wells <- unique(meta$well_id)
+wells <- unique(df_key$WellID)
 n_wells <- length(wells)
 
-# samples <- unique(meta$pbmc_sample_id)
-samples <- unique(meta$pbmc_sample_id)
+samples <- unique(df_key$SampleID)
 n_samples <- length(samples)
 
-# TODO: consider using sample sheet to explicitly determine this instead
-
-controls <- grep(control_sample_pattern, samples, value = T)
-has_controls <- length(controls) > 0 
+has_controls <- any(df_key$Type == "Control")
+controls <- df_key$SampleID[df_key$Type == "Control"]
 
 if (has_controls){
   sub_samples <- setdiff(samples, controls)
@@ -286,7 +265,7 @@ if (has_controls){
 
 n_sub_samples <- length(sub_samples)
 
-samples_pool <- tapply(meta$pbmc_sample_id, meta$pool_id, unique)
+samples_pool <- tapply(df_key$SampleID, df_key$PoolID, unique)
 samples_pool_string <- sapply(samples_pool, function(x){paste(x, collapse = ", ")})
 
 labels <- c("Batch", "N Samples", "N Pools","N Wells","Batch Control", paste0(pools, " Samples"))
@@ -297,19 +276,12 @@ simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
 ```  
 
 ```{r fig_dims}
-fig_height_samples_4col <- ceiling(n_samples/4)*1.5
 
-fig_height_samples_each_row <- n_samples*1.5
 
 fig_width_n_pools <- n_pools*8
 
 # fig_height_markers_3col <- ceiling(n_markers/3)*7
 
-```  
-
-## QC Results Summary  
-```{r echo_qc_summary_chunk, ref.label = "qc_summary" }
-# Placeholder for high-level summary (can't calculate everything until end)
 ```  
 
 <a  id="section_top"></a>  
@@ -319,66 +291,70 @@ fig_width_n_pools <- n_pools*8
 ### Well Sequencing and Alignment {.active}  
   
 The following metrics summarize the sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  
+
+#### Pool Summary  
+```{r well_summary_table1, results = "asis"}
+pool_info <- well_info %>%
+  group_by(pool_id) %>%
+  summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
+            total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+pool_info %>%
+  gt()
+
+```
+
   
 #### Detailed Well Summary  
 ```{r well_summary_table, results = "asis"}
 n_vars <- ncol(well_info)-1
-varnames <- names(well_info)[-1]
-digitsRound <- c(0,1,rep(0,4),rep(1,12),0,1)
-names(digitsRound) <- varnames
-well_info_median_range <- sapply(varnames,function(x){
+# varnames <- names(well_info)[-1]
+vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
+              "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
+              "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
+              "q30_bases_in_sample_index", "q30_bases_in_umi", "reads_mapped_antisense_to_gene", 
+              "reads_mapped_confidently_to_exonic_regions", "reads_mapped_confidently_to_genome", 
+              "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
+              "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
+              "sequencing_saturation", "total_genes_detected", "valid_barcodes")
+vartypes <- c(rep("Cells",5), rep("Sequencing",5), rep("Mapping",7),"Sequencing","Cells","Sequencing")
+digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
+# digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
+names(digitsRound) <- vnames
+well_info_median_range <- sapply(vnames,function(x){
   get_median_range(values = well_info[[x]], 
                    digits_round = digitsRound[x], 
                    verbose = F)
 }
 )
-well_info_median <- lapply(well_info[,-"well_id"], median)
-well_info_median_fmt <- as.character(well_info_median)
-well_info_cv <- sapply(well_info[,-"well_id"], function(x){round(sd(x)/mean(x)*100,1)})
+# well_info_median <- lapply(well_info[,-"well_id"], median)
+well_info_median <- sapply(vnames, function(x){formatC(median(well_info[[x]],na.rm=T),big.mark = ",", digits = digitsRound[x], format = "f")})
+well_info_range <- sapply(vnames, function(x){get_range(well_info[[x]], digits = digitsRound[x], verbose = F)})
+well_info_cv <- sapply(well_info[,..vnames], function(x){round(sd(x)/mean(x)*100,1)})
 
-well_summary_table <- data.frame(Spec = varnames, 
-                                 `Median_Range` = well_info_median_range,
-                                 `Inter_Well_CV` = well_info_cv)
+well_summary_table <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing","Mapping")),
+                                 Spec = vnames, 
+                                 Median = well_info_median,
+                                 Range = well_info_range,
+                                 Inter_Well_CV = well_info_cv) %>% 
+  arrange(Category, Spec) %>% 
+  group_by(Category)
 # well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
 well_summary_table_comments <- well_summary_table
 set.seed(1105)
 dummycomments <- sample(c("","Warning: message","Fail: message"),
                         size = nrow(well_summary_table_comments), 
                         replace=T, prob = c(0.85,0.12,0.03))
-well_summary_table_comments$Comments <- dummycomments
-well_summary_table_comments$Plot <- sprintf("[Plot](#%s)", varnames)
+well_summary_table_comments$Plot <- sprintf("[Plot](#%s)", varnames)  # hyperlink format
 
 
 well_summary_table_comments %>% 
   gt::gt() %>% 
   gt::fmt_markdown(columns = "Plot") %>% 
   gt::fmt_number(columns = vars(Inter_Well_CV), pattern = "{x}%", decimals = 1) %>% 
-  gt::tab_style(
-    style = list(
-      cell_fill(color = "red" , alpha = 0.3)
-      ),
-    locations = cells_body(
-      columns = vars(Inter_Well_CV),
-      rows = Inter_Well_CV >= 10)
-  ) %>% 
-  gt_fmt_comments()
-  # gt::tab_style(
-  #   style = list(
-  #     cell_fill(color = "red" , alpha = 0.3)
-  #     ),
-  #   locations = cells_body(
-  #     columns = vars(Comments),
-  #     rows = grepl("Warning",Comments))
-  # ) %>% 
-  # gt::tab_style(
-  #   style = list(
-  #     cell_fill(color = "red" , alpha = 0.5)
-  #     ),
-  #   locations = cells_body(
-  #     columns = vars(Comments),
-  #     rows = grepl("Fail",Comments))
-  # ) 
-  #                         
+  cols_width(vars(Spec)~pct(50),vars(Median)~pct(12),vars(Range)~pct(17),vars(Inter_Well_CV)~pct(15),vars(Plot)~pct(6)) %>% 
+  cols_label(
+    Inter_Well_CV = "Inter-well CV"
+  )
 
 ```  
   
@@ -411,6 +387,7 @@ for (i in seq_along(varnames)){
     scale_y_continuous(sec.axis = dup_axis(breaks = med_val, labels = med_val, name = ""))+
     xlab("Well") +
     ylab(spec) +
+    facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE) +
     ggtitle(sprintf("%s\nMedian=%s    CV=%.1f%%    N=%s", spec, med_val, cv, n))
 
   cat(sprintf('\n<a id="%s"></a>', spec), labels = "", sep = "\n")
@@ -433,7 +410,7 @@ for (i in seq_along(varnames)){
 
 ``` 
   
-### Cell Hashing and Sample Quality Metrics 
+### Cell Hashing
 
 <a id="top_cell_hashing"></a> 
 
@@ -449,17 +426,17 @@ for (i in seq_along(varnames)){
 ```  
 
 ```{r hashing_summary}
-stm("Output cell hashing summary table")
-
-dummy_blank <- rep("x",5)
-dummy_table <- data.frame("Specification"=dummy_blank, 
-                          "Value"= dummy_blank,
-                          "Comments"=c("","","Warning: message","Fail: message",""))
-dummy_table %>% 
-  gt() %>% 
-  gt_fmt_comments
-
-fig_width <- n_samples*0.75
+# stm("Output cell hashing summary table")
+# 
+# dummy_blank <- rep("x",5)
+# dummy_table <- data.frame("Specification"=dummy_blank, 
+#                           "Value"= dummy_blank,
+#                           "Comments"=c("","","Warning: message","Fail: message",""))
+# dummy_table %>% 
+#   gt() %>% 
+#   gt_fmt_comments
+# 
+# fig_width <- n_samples*0.75
 
 ```  
 
@@ -475,32 +452,34 @@ pool_summary <- all_meta %>%
          median_umis = median(n_umis),
          median_genes = median(n_genes), 
          .groups = "drop") %>% 
-  arrange(pool_id, hto_category)
+  arrange(pool_id, hto_category) %>% 
+  group_by(pool_id) %>%
+  mutate(pct_cells = round(n_cells/sum(n_cells)*100,1), .after = n_cells)
 pool_summary %>% 
   gt()
 ```   
 
 <!-- #### Well-Based Summary -->
 ```{r well_summary}
-# 
-# cutoffs <- well_hto_json_df %>%
-#   dplyr::group_by(hto_barcode, pbmc_sample_id, sample_hto, pool_id) %>%
-#   dplyr::summarize(n_wells = n(),
-#                    median_cutoff = median(cutoff),
-#                    cv_cutoff = sd(cutoff)/mean(cutoff)*100)
-# cutoffs
-# 
-# 
-# well_summary <- all_meta %>% 
-#   group_by(pool_id, well_id) %>% 
-#   summarize(n_cells = n(),
-#          median_reads = median(n_reads),
-#          median_umis = median(n_umis),
-#          median_genes = median(n_genes), 
-#          .groups = "drop") %>% 
-#   arrange(pool_id, well_id)
-# well_summary %>% 
-#   gt()
+
+cutoffs <- well_hto_json_df %>%
+  dplyr::group_by(hto_barcode, pbmc_sample_id, sample_hto, pool_id) %>%
+  dplyr::summarize(n_wells = n(),
+                   median_cutoff = median(cutoff),
+                   cv_cutoff = sd(cutoff)/mean(cutoff)*100)
+cutoffs
+
+
+well_summary <- all_meta %>%
+  group_by(pool_id, well_id) %>%
+  summarize(n_cells = n(),
+         median_reads = median(n_reads),
+         median_umis = median(n_umis),
+         median_genes = median(n_genes),
+         .groups = "drop") %>%
+  arrange(pool_id, well_id)
+well_summary %>%
+  gt()
 ```  
   
   
@@ -542,6 +521,20 @@ all_hash_fmt <- all_hash_fmt %>%
 
 pools <- unique(all_hash_fmt$pool_id)
 ```  
+
+```{r all_hto_counts}
+hash_by_well <- all_hash_fmt %>% 
+  group_by(pool_id,well_id, hto,sample_pool_hto) %>% 
+  summarize(hto_count = sum(count),.groups = "drop") 
+ggplot(hash_by_well, aes(well_id, hto_count, fill = hto)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  xlab("Total Raw HTO counts") +
+  facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE)
+
+```
+
 
 ```{r hto_ridge_hist, class.output = "superbigimage", results = "asis"}
 stm("Plotting hto count ridgeplots")
@@ -655,8 +648,8 @@ g_cutoff_pos <- ggplot(well_hto_json_df, aes(sample_hto, frac_pos, color = hto_b
   ggtitle("Fraction Positive HTO Calls per Well")
 
 ply_cutoff_pos <- plotly::ggplotly(g_cutoff_pos) %>%
-  add_axis_title_spacing_plotly("x", n_lines = 1) %>%
-  add_axis_title_spacing_plotly("y", n_lines = 0)
+  adjust_axis_title_spacing_plotly("x", adjustment = -0.6) %>%
+  adjust_axis_title_spacing_plotly("y", adjustment = -0.08)
 
 temp_figwidth <- (4*((n_pools>1)+1) + 3)
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
@@ -671,7 +664,7 @@ make_subchunk(ply_cutoff_pos, subchunk_name = "hto_positive_subchunk",
  
 #### HTO Category Counts by Well  
 
-```{r hto_cat_counts, fig.width = fig_width_n_pools, fig.height = 7, results = "asis"}
+```{r hto_cat_counts, results = "asis"}
 stm("Plotting hto category counts per well")
 # hto_cat <- all_meta %>% 
 #   group_by(well_id, pool_id, hto_category) %>% 
@@ -689,7 +682,8 @@ g <- qc_aligned_barplot_mod(all_meta,
                    facet_formula = formula("~pool_id"), facet_rows = 1, scales = "free_x") +
   ggtitle("HTO Category Counts per Well")
 
-temp_width <- n_pools*8
+temp_figwidth <- (4*((n_pools>1)+1) + 3)
+temp_figheight <- ceiling(n_pools/2)*6 + 0.4
 make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
@@ -701,14 +695,10 @@ make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk",
     
 #### HTO Category Fraction by Well  
 
-```{r}
-temp_figwidth <- (n_pools*4 + 2.75)
-```  
-
 ```{r hto_cat_fractions, fig.width=fig_width_n_pools, fig.height = 6}
 stm("Plotting hto category fraction per well")
 
-qc_stacked_barplot_mod(all_meta,
+g <- qc_stacked_barplot_mod(all_meta,
                        category_x = "well_id",
                        name_x = "Well ID",
                        category_y = "hto_category",
@@ -718,6 +708,11 @@ qc_stacked_barplot_mod(all_meta,
                        as_fraction = TRUE, facet_formula = formula("~pool_id"), facet_rows = 1, scales = "free_x") +
   ggtitle("HTO Category Counts per Well")
 
+temp_figwidth <- (4*((n_pools>1)+1) + 3)
+temp_figheight <- ceiling(n_pools/2)*6 + 0.4
+make_subchunk(g, subchunk_name = "hto_cat_fraction_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
   
 ```
 
@@ -915,6 +910,10 @@ plot_grid(plotlist = genes_violin_list,
 ``` 
   
 [Return to Top](#top_cell_hashing)  
+
+### Quality Metrics 
+
+<a id="top_quality_metrics"></a> 
   
 ```{r pct_mito}
 meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf), labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))
@@ -934,7 +933,7 @@ layout(hovermode = 'compare')
 
 ```   
   
-[Return to Top](#top_cell_hashing)  
+[Return to Top](#top_quality_metrics)  
   
 ```{r combine count matrices for all samples}
 stm("Reading and merging all count matrices")
@@ -1311,7 +1310,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ```  
   
-[Return to Top](#top_cell_hashing)  
+[Return to Top](#top_quality_metrics)  
 
 
 ### Cell Labeling  
@@ -1330,9 +1329,9 @@ sample_info <- meta %>%
   mutate(fct_cells_fct_mito_gt.5 = n_fct_mito_gt50/n_cells)
 
 
-dummy_table %>% 
-  gt() %>% 
-  gt_fmt_comments()
+# dummy_table %>% 
+#   gt() %>% 
+#   gt_fmt_comments()
 
 ```  
   
@@ -1383,7 +1382,7 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
 
 Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance).  
 
-```{r umap_labels,  esults = "asis", fig.height = 22, fig.width = 20, class.output = "superbigimage"}
+```{r umap_labels,  esults = "asis", fig.height = 18, fig.width = 20, class.output = "superbigimage"}
 point_size <- 0.2
 
 # Cell Types
@@ -1512,7 +1511,7 @@ label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
     summarize(N = n(), .groups = "drop") %>%
     ungroup() %>%
     group_by(!!rlang::parse_expr(mito_binary)) %>%
-    mutate(pct = N/sum(N) ) %>%
+    mutate(pct = N/sum(N)*100 ) %>%
     rename(group = !!mito_binary) %>%
     mutate(group = paste0("FractionMT",group))
 
@@ -1521,7 +1520,9 @@ label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
 
   ggplot(summary_merge, aes(factor(seurat_pbmc_type, levels = label_order), pct, fill = group))+
     geom_bar(stat = "identity", position = "dodge") +
-    theme(text = element_text(size = 14))
+    xlab("Cell Type Label")+
+    ylab("Percent Cell Type within Group")
+    theme(text = element_text(size = 18))
 }
 
 label_scores_mito(umapDF)
@@ -1593,9 +1594,9 @@ by_control <- all_control %>%
             .groups = "drop")
 # by_control
 
-dummy_table %>% 
-  gt() %>% 
-  gt_fmt_comments()
+# dummy_table %>% 
+#   gt() %>% 
+#   gt_fmt_comments()
 
 ```  
 

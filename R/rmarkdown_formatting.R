@@ -147,6 +147,50 @@ gt_fmt_comments <- function(x) {
     )
 }
 
+
+# test_gt_highlight <- function(x, column_name, threshold, highlight_rule = c("gt","lt","gte","lte"), highlight = "red", alpha = 0.3){
+#   highlight_rule <- match.arg(highlight_rule, choices = c("gt","lt","gte","lte"), several.ok = F)
+#
+#   if(highlight_rule == "gt"){
+#     gt::tab_style(data = x,
+#                   style = list(
+#                     cell_fill(color = highlight , alpha = alpha)
+#                   ),
+#                   locations = cells_body(
+#                     columns = vars(column_name),
+#                     rows = column_name > threshold)
+#     )
+#   } else if (highlight_rule == "lt"){
+#     gt::tab_style(data = x,
+#                   style = list(
+#                     cell_fill(color = highlight , alpha = alpha)
+#                   ),
+#                   locations = cells_body(
+#                     columns = vars(column_name),
+#                     rows = column_name < threshold)
+#     )
+#   } else if (highlight_rule == "gte"){
+#     gt::tab_style(data = x,
+#                   style = list(
+#                     cell_fill(color = highlight , alpha = alpha)
+#                   ),
+#                   locations = cells_body(
+#                     columns = vars(rlang::parse_expr(!!column_name)),
+#                     rows = rlang::parse_expr(!!column_name) >= threshold)
+#     )
+#   } else if (highlight_rule == "lte"){
+#     gt::tab_style(data = x,
+#                   style = list(
+#                     cell_fill(color = highlight , alpha = alpha)
+#                   ),
+#                   locations = cells_body(
+#                     columns = vars(column_name),
+#                     rows = column_name <= threshold)
+#     )
+#   }
+#
+# }
+
 # Data summary functions
 
 
@@ -201,5 +245,55 @@ get_median_range <- function(values, digits_round = 1, comma_separate = TRUE, ad
   }
 
   return(med_range_string)
+}
+
+
+#' Get formatted range
+#'
+#' Gets range of numeric vector, rounding to specified digits with option
+#' to show the number of missing values.
+#'
+#' @param values Numeric vector
+#' @param digits_round Number of digits to round to. Default 1.
+#' @param comma_separate Logical, default TRUE. Should large values be displayed with comma separators
+#' @param add_missing Logical, default TRUE. Should the number of missing values be displayed in brackets
+#' @param verbose Logical, default TRUE. Should a message be printed upon successful calculation, including the number of missing values.
+#' @return String value of formatted median and range. 'median (min-max) [missing]'
+#' @export
+#' @examples
+#' my_values <- c(1000:1010,NA)
+#' get_range(my_values, digits_round = 1, comma_separate = TRUE, add_missing = TRUE, verbose = TRUE)
+get_range <- function(values, digits_round = 1, comma_separate = TRUE, add_missing = TRUE, verbose = TRUE){
+  assertthat::assert_that(mode(values) == "numeric" | all(is.na(values))) # can be any type of numeric, allow calculation if all missing
+  assertthat::assert_that(length(values) > 0)
+
+  fmt_num <- function(num){
+    formatC(num, digits = digits_round, big.mark = ifelse(comma_separate,",",""), format = "f")
+  }
+
+  i_missing <- which(is.na(values))
+  n_missing <- length(i_missing)
+  has_missing <- n_missing > 0
+
+  if(has_missing){
+    values <- values[-i_missing]
+  }
+
+  if(length(values) > 0){
+    range_val <- fmt_num(range(values))
+  } else {
+    range_val <- c(NA,NA)
+  }
+  range_string <- paste(range_val, collapse = "-")
+
+  if(add_missing & has_missing){
+    range_string <- sprintf("%s [%s]", range_string, n_missing)
+  }
+
+  if(verbose){
+    cat(sprintf("Range calculated. Removed %s missing values", n_missing), sep = "\n")
+  }
+
+  return(range_string)
 }
 

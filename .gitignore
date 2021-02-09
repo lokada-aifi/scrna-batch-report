@@ -11,3 +11,4 @@ merged_so_pcaresults.rds
 inst/rmarkdown/.ipynb_checkpoints/
 inst/rmarkdown/meta.Rds
 testing_code/
+inst/rmarkdown/figure
