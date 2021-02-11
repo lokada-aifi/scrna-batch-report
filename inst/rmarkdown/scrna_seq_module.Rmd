@@ -1,0 +1,153 @@
+<!-- # Child Rmarkdown Document for 10X genomics cellranger-based sequencing outputs-->
+<!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
+The following metrics summarize the sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  
+
+```{r scrna_seq_dependency_check}
+assertthat::assert_that(exists("rna_in_dir"))
+assertthat::assert_that(length(dir(file.path(rna_in_dir,"labeled_h5"))>0))
+
+```
+
+```{r scrna_definitions}
+vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
+              "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
+              "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
+              "q30_bases_in_sample_index", "q30_bases_in_umi", "reads_mapped_antisense_to_gene", 
+              "reads_mapped_confidently_to_exonic_regions", "reads_mapped_confidently_to_genome", 
+              "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
+              "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
+              "sequencing_saturation", "total_genes_detected", "valid_barcodes")
+
+```
+
+```{r seq_input_files}
+if(!exists("all_labeled_h5")){
+  all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+}
+
+if(!exists("well_info")){
+  # Merge Well Data
+  stm("Reading in labeled h5 file well data")
+  
+  well_list <- future_lapply(all_labeled_h5, read_h5_well_meta)
+  well_info <- unique(do.call(rbind, well_list))
+  setDT(well_info)
+  well_info[, pool_id := gsub("C\\d+W\\d+", "", well_id)]
+  
+  remove("well_list")
+}
+
+```
+  
+#### Pool Summary  
+```{r well_summary_table1, results = "asis"}
+pool_info <- well_info %>%
+  dplyr::group_by(pool_id) %>%
+  dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
+            total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+names(pool_info) <- stringr::str_to_title(gsub("_", " ", names(pool_info)))
+pool_info %>%
+  gt::gt() %>%
+  gt::cols_align(align = "right", columns = 2:3)
+```  
+  
+#### Detailed Well Summary  
+```{r well_summary_table, results = "asis"}
+vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
+            "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
+            "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
+            "q30_bases_in_sample_index", "q30_bases_in_umi", "reads_mapped_antisense_to_gene", 
+            "reads_mapped_confidently_to_exonic_regions", "reads_mapped_confidently_to_genome", 
+            "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
+            "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
+            "sequencing_saturation", "total_genes_detected", "valid_barcodes")
+n_vars <- length(vnames)
+vartypes <- c(rep("Cells", 5), rep("Sequencing", 5), rep("Mapping", 7),"Sequencing","Cells","Sequencing")
+digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
+# digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
+names(digitsRound) <- vnames
+well_info_median_range <- sapply(vnames,function(x){
+  get_median_range(values = well_info[[x]], 
+                   digits_round = digitsRound[x], 
+                   verbose = F)
+}
+)
+# well_info_median <- lapply(well_info[,-"well_id"], median)
+well_info_median <- sapply(vnames, function(x){formatC(median(well_info[[x]],na.rm=T),big.mark = ",", digits = digitsRound[x], format = "f")})
+well_info_range <- sapply(vnames, function(x){get_range(well_info[[x]], digits = digitsRound[x], verbose = F)})
+well_info_cv <- sapply(well_info[,..vnames], function(x){round(sd(x)/mean(x)*100,1)})
+
+well_summary_table <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing","Mapping")),
+                                 Spec = vnames, 
+                                 Median = well_info_median,
+                                 Range = well_info_range,
+                                 Inter_Well_CV = well_info_cv, 
+                                 Plot = sprintf("[Plot](#%s)", vnames)) %>% 
+  arrange(Category, Spec) 
+  # group_by(Category)
+# well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
+well_summary_table_comments <- well_summary_table
+set.seed(1105)
+dummycomments <- sample(c("","Warning: message","Fail: message"),
+                        size = nrow(well_summary_table_comments), 
+                        replace=T, prob = c(0.85,0.12,0.03))
+# well_summary_table_comments$Plot <- sprintf("[Plot](#%s)", vnames)  # hyperlink format
+
+
+well_summary_table_comments %>% 
+  gt::gt() %>% 
+  gt::fmt_markdown(columns = "Plot") %>% # convert the plot column text to markdown to activate links. these link to plots below.
+  gt::fmt_number(columns = vars(Inter_Well_CV), pattern = "{x}%", decimals = 1) %>% 
+  gt::cols_width(vars(Spec)~pct(50),vars(Median)~pct(12),vars(Range)~pct(17),vars(Inter_Well_CV)~pct(15),vars(Plot)~pct(6)) %>% 
+  gt::cols_label(
+    Inter_Well_CV = "Inter-well CV"
+  )
+
+```  
+  
+  
+#### Plots of Well-Level Metrics  
+  
+```{r well_plots, results = "asis"}
+stm("Generating sequencing and alignment QC plots")
+
+bar_theme <- function(...){
+  ggplot2::theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), ...)
+}
+verpal <- hcl.colors(n = n_vars, palette = "viridis")
+
+# Plots
+for (i in seq_along(vnames)){
+  df <- data.table::copy(well_info)
+  spec <- vnames[i]
+  # spec_lab <- well_spec_labels[i]
+  df <- as.data.frame(df)
+  df$spec_col <- df[,spec]
+  med_val <- median(df$spec_col)
+  cv <- round(sd(df$spec_col)/mean(df$spec_col)*100, 2)
+  n <- sum(!is.na(df$spec_col))
+  
+  g <- ggplot(df, aes(well_id, spec_col)) +
+    geom_bar(stat = "identity", fill = verpal[i]) + 
+    bar_theme() +
+    geom_hline(yintercept = med_val, linetype = "dashed", color = "red")+
+    scale_y_continuous(sec.axis = dup_axis(breaks = med_val, labels = med_val, name = ""))+
+    xlab("Well") +
+    ylab(stringr::str_to_title(gsub("_"," ",spec))) +
+    facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE) +
+    ggtitle(stringr::str_to_title(gsub("_"," ",spec)), 
+            subtitle = sprintf("Median=%s    CV=%.1f%%    N=%s", med_val, cv, n))
+  
+  # Plot-specific hyperlink definition
+  cat(sprintf('\n<a id="%s"></a>', spec), labels = "", sep = "\n")
+  
+  # Output plot
+  suppressWarnings(print(g))
+  
+  # Link back to top of section
+  cat("  \n[Return to Top](#rna_seq_top)", labels = "", sep = "\n")
+  
+}
+
+``` 
+  

@@ -19,7 +19,7 @@ params:
 ---
 
 ```{r setup, echo = FALSE, include = TRUE}
-# Load Libraries  
+# Load Libraries
 start_time <- Sys.time()
 
 options(warn = 1)  # output warnings as they appear for traceability in stdout/stderr record
@@ -46,8 +46,8 @@ quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 
-#for(i in dir("~/Packages/scrna-batch-report/R", full.names = T)) source(i)  ## UPDATE THIS WHEN PACKAGE IS MADE
-for(i in dir("/home/jupyter/scrna-batch-report/R", full.names = T)) source(i) 
+for(i in dir("~/Packages/scrna-batch-report/R", full.names = T)) source(i)  ## UPDATE THIS WHEN PACKAGE IS MADE
+# for(i in dir("/home/jupyter/scrna-batch-report/R", full.names = T)) source(i) 
 
 stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))
 ```  
@@ -91,12 +91,12 @@ options('future.globals.maxSize' = par_mb_limit*1024^2)
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   # in_dir <- system.file("testdata", package = "scrna-batch-summary")
-  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
-  in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
+  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
 
   batch <- "T001"
-  #in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
-  in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv"
+  # in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
 
 } else {
   in_dir <- params$in_dir
@@ -160,6 +160,7 @@ setDT(well_info)
 well_info[, pool_id := gsub("C\\d+W\\d+", "", well_id)]
 
 remove("well_list")
+
 ```  
 
 ```{r read_json}
@@ -177,7 +178,7 @@ well_hto_json_df <- well_hto_json_df %>%
 remove("well_hto_json_list")
 ```  
 
-```{r read_multiplet}
+```{r read_multiplet}  
 stm("Reading in multiplet h5 file meta data")
 multiplet_meta_list <- future_lapply(all_multiplet_h5, read_h5_cell_meta)
 multiplet_meta <- do.call(rbind, multiplet_meta_list)
@@ -247,7 +248,7 @@ stm("Constructing Batch Information table")
 pools <- unique(df_key$PoolID)
 n_pools <- length(pools)
 
-wells <- unique(df_key$WellID)
+wells <- unlist(strsplit(unique(df_key$WellID), split = ";"))
 n_wells <- length(wells)
 
 samples <- unique(df_key$SampleID)
@@ -297,16 +298,15 @@ pool_info <- well_info %>%
   group_by(pool_id) %>%
   summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
             total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+names(pool_info) <- stringr::str_to_title(gsub("_"," ",names(pool_info)))
 pool_info %>%
-  gt()
-
+  gt() %>%
+  cols_align(align = "right", columns = 2:3)
 ```
 
   
 #### Detailed Well Summary  
 ```{r well_summary_table, results = "asis"}
-n_vars <- ncol(well_info)-1
-# varnames <- names(well_info)[-1]
 vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
               "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
               "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
@@ -315,7 +315,8 @@ vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells",
               "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
               "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
               "sequencing_saturation", "total_genes_detected", "valid_barcodes")
-vartypes <- c(rep("Cells",5), rep("Sequencing",5), rep("Mapping",7),"Sequencing","Cells","Sequencing")
+n_vars <- length(vnames)
+vartypes <- c(rep("Cells", 5), rep("Sequencing", 5), rep("Mapping", 7),"Sequencing","Cells","Sequencing")
 digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
 # digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
 names(digitsRound) <- vnames
@@ -336,8 +337,8 @@ well_summary_table <- data.frame(Category = factor(vartypes, levels = c("Cells",
                                  Range = well_info_range,
                                  Inter_Well_CV = well_info_cv, 
                                  Plot = sprintf("[Plot](#%s)", vnames)) %>% 
-  arrange(Category, Spec) %>% 
-  group_by(Category)
+  arrange(Category, Spec) 
+  # group_by(Category)
 # well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
 well_summary_table_comments <- well_summary_table
 set.seed(1105)
@@ -349,8 +350,9 @@ dummycomments <- sample(c("","Warning: message","Fail: message"),
 
 well_summary_table_comments %>% 
   gt::gt() %>% 
-  gt::fmt_markdown(columns = "Plot") %>% 
+  gt::fmt_markdown(columns = "Plot") %>% # convert the plot column text to markdown to activate links. these link to plots below.
   gt::fmt_number(columns = vars(Inter_Well_CV), pattern = "{x}%", decimals = 1) %>% 
+  gt::
   cols_width(vars(Spec)~pct(50),vars(Median)~pct(12),vars(Range)~pct(17),vars(Inter_Well_CV)~pct(15),vars(Plot)~pct(6)) %>% 
   cols_label(
     Inter_Well_CV = "Inter-well CV"
@@ -388,9 +390,13 @@ for (i in seq_along(vnames)){
     xlab("Well") +
     ylab(spec) +
     facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE) +
-    ggtitle(sprintf("%s\nMedian=%s    CV=%.1f%%    N=%s", spec, med_val, cv, n))
-
+    ggtitle(stringr::str_to_title(gsub("_"," ",spec)), 
+            subtitle = sprintf("Median=%s    CV=%.1f%%    N=%s", med_val, cv, n))
+  
+  # output invisible link
   cat(sprintf('\n<a id="%s"></a>', spec), labels = "", sep = "\n")
+  
+  # output plot
   suppressWarnings(print(g))
   
   # cat("  ", labels = "", sep = "\n")
@@ -461,7 +467,6 @@ pool_summary %>%
 
 <!-- #### Well-Based Summary -->
 ```{r well_summary}
-
 cutoffs <- well_hto_json_df %>%
   dplyr::group_by(hto_barcode, pbmc_sample_id, sample_hto, pool_id) %>%
   dplyr::summarize(n_wells = n(),
@@ -917,10 +922,6 @@ plot_grid(plotlist = genes_violin_list,
   
 ```{r pct_mito}
 meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf), labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))
-# ggplot(meta, aes(pbmc_sample_id, fct_mito_umi, color = fct_mito_umi > 0.5)) +
-#   geom_point(alpha = 0.2,position = position_jitter(height = 0, width = 0.3, seed = 1)) +
-#   geom_boxplot(color = "black", alpha = 0 , outlier.alpha = 1) +
-#   scale_y_log10()
 
 g_bar <- ggplot(meta, aes(pbmc_sample_pool,  fill = fct_mito_group))+
   geom_bar() +

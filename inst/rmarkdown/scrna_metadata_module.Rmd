@@ -1,0 +1,49 @@
+
+
+```{r rna_metadata_files}
+if(!exists("all_labeled_h5")){
+  all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+}
+
+if(!exists("all_multiplet_h5")){
+  all_multiplet_h5 <- list.files(path = file.path(rna_in_dir,"multiplet_h5"), pattern = "_multiplet.h5$", full.names = TRUE, recursive = TRUE)
+}
+
+if(!exists("well_info")){
+  # Merge Well Data
+  stm("Reading in labeled h5 file well data")
+  
+  well_list <- future_lapply(all_labeled_h5, read_h5_well_meta)
+  well_info <- unique(do.call(rbind, well_list))
+  setDT(well_info)
+  well_info[, pool_id := gsub("C\\d+W\\d+", "", well_id)]
+  
+  remove("well_list")
+}
+
+```
+
+```{r merge_meta}
+# Merge Metadata
+stm("Reading in labeled h5 file meta data")
+
+# Merge the count matrices for all samples into 1 table
+avail_workers <- as.numeric(future::availableCores())
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
+
+meta_list <- future_lapply(all_labeled_h5, read_h5_cell_meta)
+meta <- do.call(rbind, meta_list)
+setDT(meta)
+
+remove("meta_list")
+```
+
+```{r read_multiplet}  
+stm("Reading in multiplet h5 file meta data")
+multiplet_meta_list <- future_lapply(all_multiplet_h5, read_h5_cell_meta)
+multiplet_meta <- do.call(rbind, multiplet_meta_list)
+setDT(multiplet_meta)
+all_meta <- merge(meta, multiplet_meta, all = TRUE) 
+remove("multiplet_meta_list","multiplet_meta")
+```  
+  
