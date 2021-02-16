@@ -2,9 +2,9 @@
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
 The following metrics summarize the sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  
 
-```{r scrna_seq_dependency_check}
+```{r scrna_seq_dependency_check, include = FALSE}
 assertthat::assert_that(exists("rna_in_dir"))
-assertthat::assert_that(length(dir(file.path(rna_in_dir,"labeled_h5"))>0))
+assertthat::assert_that(length(dir(file.path(rna_in_dir,"labeled_h5")))>0)
 
 ```
 
@@ -64,44 +64,55 @@ vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells",
 n_vars <- length(vnames)
 vartypes <- c(rep("Cells", 5), rep("Sequencing", 5), rep("Mapping", 7),"Sequencing","Cells","Sequencing")
 digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
-# digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
-names(digitsRound) <- vnames
-well_info_median_range <- sapply(vnames,function(x){
-  get_median_range(values = well_info[[x]], 
-                   digits_round = digitsRound[x], 
-                   verbose = F)
-}
-)
-# well_info_median <- lapply(well_info[,-"well_id"], median)
-well_info_median <- sapply(vnames, function(x){formatC(median(well_info[[x]],na.rm=T),big.mark = ",", digits = digitsRound[x], format = "f")})
-well_info_range <- sapply(vnames, function(x){get_range(well_info[[x]], digits = digitsRound[x], verbose = F)})
-well_info_cv <- sapply(well_info[,..vnames], function(x){round(sd(x)/mean(x)*100,1)})
 
-well_summary_table <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing","Mapping")),
-                                 Spec = vnames, 
-                                 Median = well_info_median,
-                                 Range = well_info_range,
-                                 Inter_Well_CV = well_info_cv, 
-                                 Plot = sprintf("[Plot](#%s)", vnames)) %>% 
-  arrange(Category, Spec) 
-  # group_by(Category)
+df_vars <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing","Mapping")),
+                      Spec = vnames,
+                      Round = digitsRound)
+
+well_summary_table <- well_info %>% 
+  gather(key = Spec, value = Value, all_of(vnames)) %>% 
+  full_join(df_vars, by = "Spec") %>% 
+  group_by(pool_id, Category, Spec) %>% 
+  summarize(Median = formatC(median(Value, na.rm=T), big.mark = ",", digits = unique(Round), format = "f"),
+            Range = get_range(Value, digits = unique(Round), verbose = F), 
+            CV = round(sd(Value)/mean(Value)*100,1),
+            .groups = "drop") %>% 
+  arrange(pool_id, Category, Spec) %>% ## ensures pools are in order after pivot
+  tidyr::pivot_wider(id_cols = c("Category","Spec"), 
+                     names_from = pool_id, 
+                     values_from = c("Median","Range","CV"),
+                     names_glue = "{pool_id}_{.value}") %>% 
+  mutate( Plot = sprintf("[Plot](#%s)", Spec))
+
 # well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
 well_summary_table_comments <- well_summary_table
 set.seed(1105)
 dummycomments <- sample(c("","Warning: message","Fail: message"),
                         size = nrow(well_summary_table_comments), 
                         replace=T, prob = c(0.85,0.12,0.03))
-# well_summary_table_comments$Plot <- sprintf("[Plot](#%s)", vnames)  # hyperlink format
 
-
-well_summary_table_comments %>% 
+gt_table <- well_summary_table_comments %>% 
   gt::gt() %>% 
-  gt::fmt_markdown(columns = "Plot") %>% # convert the plot column text to markdown to activate links. these link to plots below.
-  gt::fmt_number(columns = vars(Inter_Well_CV), pattern = "{x}%", decimals = 1) %>% 
-  gt::cols_width(vars(Spec)~pct(50),vars(Median)~pct(12),vars(Range)~pct(17),vars(Inter_Well_CV)~pct(15),vars(Plot)~pct(6)) %>% 
-  gt::cols_label(
-    Inter_Well_CV = "Inter-well CV"
-  )
+  gt::fmt_markdown(columns = "Plot") %>% # convert the plot column text to markdown to activate links. these links generated with plots below.
+  gt::cols_width(vars(Category) ~ px(100),
+                 vars(Spec) ~ px(375),
+                 ends_with("Median") ~ px(125),
+                 ends_with("Range") ~ px(150),
+                 ends_with("CV") ~ px(50),
+                 vars(Plot) ~ px(60)) %>% 
+  gt:: tab_spanner_delim(delim = "_") %>% 
+  gt::cols_align(align = "right",
+                 columns = c(ends_with("Median"), ends_with("Range"))) %>% 
+  gt::cols_align(align = "center",
+                 columns = vars(Plot)) 
+# names(gt_table$`_data`) 
+gt_table
+  
+  # gt::fmt_number(columns = vars(CV), pattern = "{x}%", decimals = 1) %>% 
+  # gt::cols_width(vars(Spec)~pct(50),vars(Median)~pct(12),vars(Range)~pct(17),vars(Inter_Well_CV)~pct(15),vars(Plot)~pct(6)) %>% 
+  # gt::cols_label(
+  #   Inter_Well_CV = grep("CV", names(well_summary_table_comments), value = T)
+  # )
 
 ```  
   
@@ -111,16 +122,12 @@ well_summary_table_comments %>%
 ```{r well_plots, results = "asis"}
 stm("Generating sequencing and alignment QC plots")
 
-bar_theme <- function(...){
-  ggplot2::theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), ...)
-}
 verpal <- hcl.colors(n = n_vars, palette = "viridis")
 
 # Plots
 for (i in seq_along(vnames)){
   df <- data.table::copy(well_info)
   spec <- vnames[i]
-  # spec_lab <- well_spec_labels[i]
   df <- as.data.frame(df)
   df$spec_col <- df[,spec]
   med_val <- median(df$spec_col)
@@ -136,7 +143,8 @@ for (i in seq_along(vnames)){
     ylab(stringr::str_to_title(gsub("_"," ",spec))) +
     facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE) +
     ggtitle(stringr::str_to_title(gsub("_"," ",spec)), 
-            subtitle = sprintf("Median=%s    CV=%.1f%%    N=%s", med_val, cv, n))
+            subtitle = sprintf("Median=%s    CV=%.1f%%    N=%s", med_val, cv, n)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
   
   # Plot-specific hyperlink definition
   cat(sprintf('\n<a id="%s"></a>', spec), labels = "", sep = "\n")

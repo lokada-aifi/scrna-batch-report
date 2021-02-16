@@ -4,8 +4,9 @@
 #' Facet wrapping will be performed on supplied variables based on the facet_formula.
 #'
 #' @param meta A data.frame containing metadata
-#' @param category_x A character object specifying the metadata to use for splitting in the y-direction
+#' @param category_x A character object specifying the metadata to use for splitting in the x-direction
 #' @param name_x A character object specifying a name to display on the x-axis
+#' @param category_y  A character object specifying the metadata to use for color groups
 #' @param category_name A character object specifying a name to display for the colors
 #' @param colorset_y A colorset to use as fills for category_y. Currently supported: "rainbow" or "varibow". Default is "varibow"
 #' @param name_y 	A character object specifying a name for the y-axis.
@@ -13,6 +14,8 @@
 #' @param facet_formula A formula object for faceting based on variables in the meta data frame. For example, \code{formula("~pool_id")} will facet wrap by a variable called pool_id in meta.
 #' @param ... Additional arguments passed to \code{ggplot2::face_wrap()}
 #' @return A ggplot2 plot object
+#' @import data.table
+#' @import ggplot2
 #' @export
 qc_stacked_barplot_facet <- function (meta, category_x = "batch_id", name_x = "Batch ID",
                                     category_y = "well_id", category_name = "Well ID", colorset_y = "varibow",
@@ -35,9 +38,8 @@ qc_stacked_barplot_facet <- function (meta, category_x = "batch_id", name_x = "B
   assertthat::assert_that(length(colorset_y) == 1)
   assertthat::assert_that(colorset_y %in% c("rainbow", "varibow"))
   assertthat::assert_that(class(as_fraction) == "logical")
-  assertthat::assert_that(length(as_fraction) == 1)
   assertthat::assert_that(is.null(facet_formula) || rlang::is_formula(facet_formula))
-  meta <- as.data.table(meta)
+  meta <- data.table::as.data.table(meta)
 
   if(!is.null(facet_formula)){
     formula_cols <- as.character(as.list(facet_formula))
@@ -76,14 +78,14 @@ qc_stacked_barplot_facet <- function (meta, category_x = "batch_id", name_x = "B
     count_table <- count_table[, `:=`(ymin, shift(ymax,
                                                   fill = 0, type = "lag")), by = list(get(category_x))]
   }
-  p <- ggplot2::ggplot() + ggplot2::geom_rect(data = count_table,
-                                              ggplot2::aes(xmin = xpos - 0.4, xmax = xpos + 0.4, ymin = ymin,
-                                                           ymax = ymax, fill = fill)) + ggplot2::scale_fill_identity(category_name,
+  p <- ggplot() + geom_rect(data = count_table,
+                                              aes(xmin = xpos - 0.4, xmax = xpos + 0.4, ymin = ymin,
+                                                           ymax = ymax, fill = fill)) + scale_fill_identity(category_name,
                                                                                                                      breaks = plot_fills$fill, labels = plot_fills[[category_y]],
-                                                                                                                     guide = "legend") + ggplot2::scale_x_continuous(name_x,
+                                                                                                                     guide = "legend") + scale_x_continuous(name_x,
                                                                                                                                                                      breaks = plot_xpos$xpos, labels = plot_xpos[[category_x]]) +
-    ggplot2::scale_y_continuous(name_y) + ggplot2::theme_bw() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90,
+    scale_y_continuous(name_y) + theme_bw() +
+    theme(axis.text.x = element_text(angle = 90,
                                                        hjust = 1, vjust = 0.3))
   if(!is.null(facet_formula)){
     p <- p +
@@ -100,6 +102,7 @@ qc_stacked_barplot_facet <- function (meta, category_x = "batch_id", name_x = "B
 #' @param meta A data.frame containing metadata
 #' @param category_x A character object specifying the metadata to use for splitting in the y-direction
 #' @param name_x A character object specifying a name to display on the x-axis
+#' @param category_y  A character object specifying the metadata to use for color groups
 #' @param category_name A character object specifying a name to display for the colors
 #' @param colorset_y A colorset to use as fills for category_y. Currently supported: "rainbow" or "varibow". Default is "varibow"
 #' @param name_y 	A character object specifying a name for the y-axis.
@@ -107,14 +110,17 @@ qc_stacked_barplot_facet <- function (meta, category_x = "batch_id", name_x = "B
 #' @param facet_formula A formula object for faceting based on variables in the meta data frame. For example, \code{formula("~pool_id")} will facet wrap by a variable called pool_id in meta.
 #' @param ... Additional arguments passed to \code{ggplot2::face_wrap()}
 #' @return A ggplot2 plot object
+#' @import data.table
+#' @import ggplot2
 #' @export
-qc_aligned_barplot_facet <- function (meta, category_x = "batch_id",
-                                    name_x = "Batch ID",
-                                    category_y = "well_id",
-                                    category_name = "Well ID",
-                                    colorset_y = "varibow",
-                                    name_y = "N Cells", padding = 0.2,
-                                    facet_formula = NULL, ...) {
+qc_aligned_barplot_facet <- function (meta,
+                                      category_x = "batch_id",
+                                      name_x = "Batch ID",
+                                      category_y = "well_id",
+                                      category_name = "Well ID",
+                                      colorset_y = "varibow",
+                                      name_y = "N Cells", padding = 0.2,
+                                      facet_formula = NULL, ...) {
   assertthat::assert_that(sum(class(meta) %in% c("data.frame",
                                                  "data.table")) > 0)
   assertthat::assert_that(class(category_x) == "character")
@@ -227,12 +233,14 @@ qc_aligned_barplot_facet <- function (meta, category_x = "batch_id",
 #' If need to add spacing to both, make separate calls to `add_axis_title_spacing_plotly()`
 #' @param n_lines Numeric value. Number of lines worth of spacing to add.
 #' @return A the original plotly object with updated axis name
+#' @export
 #' @examples
 #' library(ggplot2)
 #' library(plotly)
+#' library(dplyr)
 #' set.seed(1)
-#' x <- sapply(1:10,function(x){paste(LETTERS[sample(1:26,10,replace = T)],collapse="")})
-#' y <- sapply(1:20,function(x){paste(LETTERS[sample(1:26,10,replace = T)],collapse="")})
+#' x <- sapply(1:10,function(x){paste(LETTERS[sample(1:26,10,replace = TRUE)],collapse="")})
+#' y <- sapply(1:20,function(x){paste(LETTERS[sample(1:26,10,replace = TRUE)],collapse="")})
 #' z <- rep(c("A","B"), times = 10)
 #' df <- data.frame(x, y, z)
 #' g <- ggplot(df, aes(x, y))+
@@ -259,7 +267,7 @@ add_axis_title_spacing_plotly <- function(plotly_obj, axis, n_lines){
   annotation_index <- (axis=="y") + 1
   orig_title <- plotly_obj$x$layout$annotations[[annotation_index]]$text
   if(is.null(orig_title)){
-    stop(sprintf("No title detected in plotly object for axis %s",x))
+    stop(sprintf("No title detected in plotly object for axis %s", axis))
   }
 
   spacing_string <- paste("",rep("\n",n_lines), collapse = "")
@@ -276,19 +284,22 @@ add_axis_title_spacing_plotly <- function(plotly_obj, axis, n_lines){
 
 #' Add Axis Spacing for Faceted Plotly
 #'
-#' Adjusts the axis titles in plotly objects
+#' Adjusts the axis titles in plotly objects by modifying the object itself,
+#' since plotly's auto spacing does not do this appropriately for faceted plots
 #'
 #' @param plotly_obj An object generated by ggplotly
 #' @param axis String value of "x" or "y". Which axis title to add spacing to.
 #' If need to add spacing to both, make separate calls to `adjust_axis_title_spacing_plotly()`
 #' @param adjustment Numeric value. Vertical (for x-axis) or horizontal (for y-axis) adjustment for axis title
 #' @return A the original plotly object with updated axis name
+#' @export
 #' @examples
 #' library(ggplot2)
 #' library(plotly)
+#' library(dplyr)
 #' set.seed(1)
-#' x <- sapply(1:10,function(x){paste(LETTERS[sample(1:26,10,replace = T)],collapse="")})
-#' y <- sapply(1:20,function(x){paste(LETTERS[sample(1:26,10,replace = T)],collapse="")})
+#' x <- sapply(1:10,function(x){paste(LETTERS[sample(1:26,10,replace = TRUE)],collapse="")})
+#' y <- sapply(1:20,function(x){paste(LETTERS[sample(1:26,10,replace = TRUE)],collapse="")})
 #' z <- rep(c("A","B"), times = 10)
 #' df <- data.frame(x, y, z)
 #' g <- ggplot(df, aes(x, y))+
@@ -298,7 +309,7 @@ add_axis_title_spacing_plotly <- function(plotly_obj, axis, n_lines){
 #'   ylab("Y TITLE") +
 #'   theme(axis.text.x = element_text(angle = 90))
 #' g
-#' gp <- ggplotly(g)
+#' gp <- plotly::ggplotly(g)
 #' gp
 #' gp %>%
 #'   adjust_axis_title_spacing_plotly("x", 0.05) %>%
@@ -321,14 +332,30 @@ adjust_axis_title_spacing_plotly <- function(plotly_obj, axis, adjustment){
   return(plotly_obj)
 }
 
+#' Plot UMAP
 #'
+#' Standardized UMAP plotting with color customization for grouping variables
+#'
+#' @param df A data frame containing umap data and metadata for plotting
+#' @param x_col Character value. Name of data column to plot on the x-axis
+#' @param x_lab Character value. Name to display on the x-axis
+#' @param y_col CHaracter value. Name of data column to plot on the y-axis
+#' @param y_lab Character value. Name to display on the y-axis
+#' @param title Character value. Title of plot.
+#' @param point_size Numeric value. Point size to use for scatter plot
+#' @param color_col Character value, Name of data column used to color point by groups or value
+#' @param scale_color_fun A function that returns color scaling for ggplot2
+#' @param ... Additional arguments passed to \code{scale_color_fun}
+#' @return A ggplot2 plot object
+#' @import ggplot2
+#' @export
 plot_umap_report <- function(df, x_col, x_lab, y_col, y_lab, title, point_size, color_col, scale_color_fun,...){
   g <- ggplot(df, aes_string(x_col, y_col)) +
     geom_point(alpha = 1, size = point_size, aes_string(color = color_col)) +
     ggtitle(title)+
     xlab(x_lab) +
     ylab(y_lab) +
-    scale_color_fun() +
+    scale_color_fun(...) +
     theme_bw() +
     theme(aspect.ratio = 1/1,
           text = element_text(size = 20))
@@ -336,29 +363,122 @@ plot_umap_report <- function(df, x_col, x_lab, y_col, y_lab, title, point_size, 
 
 }
 
-scale_color_genes <- function(max_genes){
+#' Pretty Color-Gradient-N Scaling across Data
+#'
+#' Creates a standard rainbow color scaling for set of values. Ensures default range
+#' of interest will be colored consistently, with any observed values higher than
+#' the default range colored a separate color. By default, expected range is blue to
+#' red with high values as dark red. Default ranges were roughly based on genes per cell
+#'
+#' @param max_value Character value. Highest data value to extend color scale to.
+#' @param colors Colors to use in  \code{scale_color_gradientn()}
+#' @param value_breaks Values associated with each color, in order
+#' @param highest_col Color to scale out to for observed values higher than
+#' largest \code{value_breaks} value
+#' @return A custom function of \code{scale_color_gradientn()} with colors, values, and breaks defined.
+#' The function will accept additional arguments to \code{scale_color_gradientn()}
+#' @import ggplot2
+#' @export
+#' @examples
+#' library(ggplot2)
+#' set.seed(3)
+#' high_genes <- data.frame(x = runif(100, 0, 10), y = 1:100, n_genes = rnorm(100, 3500, 1000))
+#' my_color_fun_high <- scale_color_manual_rainbow(max(high_genes$n_genes))
+#' ggplot(high_genes, aes(x, y, color = n_genes))+ geom_point() + my_color_fun_high()
+#'
+#' super_high_genes <- data.frame(x = runif(100, 0, 10), y = 1:100, n_genes = runif(100, 3000, 9000))
+#' my_color_fun_super_high <- scale_color_genes(max(super_high_genes$n_genes))
+#' ggplot(super_high_genes, aes(x, y, color = n_genes))+ geom_point() + my_color_fun_super_high()
+#'
+#' low_genes <- data.frame(x = runif(100, 0, 10), y = 1:100, n_genes = runif(100, 0, 2900))
+#' my_color_fun_low <- scale_color_genes(max(low_genes$n_genes))
+#' ggplot(low_genes, aes(x, y, color = n_genes))+ geom_point() + my_color_fun_low()
+scale_color_manual_rainbow <- function(max_value,
+                                       colors = c("blue","deepskyblue","green3", "yellow","orange","red"),
+                                       value_breaks = c(0,500, 1000, 2000, 3000, 4000),
+                                       highest_col = "darkred"){
   function(...){
-    scale_color_gradientn(limits = c(0, max_genes),
-                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
-                          values = scales::rescale(c(0,500, 1000, 2000, 3000, 4000, max_genes),
-                                                   from = c(0, max_genes)),
-                          breaks = c(0,2000,4000,6000,8000), ...)
+    if(max_value > max(value_breaks)){
+      scale_color_gradientn(limits = c(0, max_value),
+                            colours = c(colors, highest_col),
+                            values = scales::rescale(c(value_breaks, max_value),
+                                                     from = c(0, max_value)),
+                            breaks = pretty(c(0, max_value), n = 4, min.n = 3), ...)
+    } else {
+      i_max_break <- which(value_breaks > max_value)[1] # smallest break greater than data
+      scale_color_gradientn(limits = c(0, value_breaks[i_max_break]),
+                            colours = colors[1:i_max_break],
+                            values = scales::rescale(value_breaks[1:i_max_break],
+                                                     from = c(0, value_breaks[i_max_break])),
+                            breaks = pretty(c(0, value_breaks[i_max_break]), n = 4, min.n = 3), ...)
+    }
   }
 }
 
-scale_color_umis <- function(max_umi){
-  function(...){
-    scale_color_gradientn(limits = c(0, max_umi),
-                          colours = c("blue","deepskyblue","green3", "yellow","orange","red","darkred"),
-                          values = scales::rescale(c(0,1000, 3000, 5000, 7500, 10000, max_umi),
-                                                   from = c(0, max_umi)), ...)
-  }
+#' Default Color Gradient for Genes per Cell
+#'
+#' Uses \code{} with default values to create a gradient for genes per cell, with
+#' scale adjusting to observed values
+#'
+#' @param max_value Character value. Highest genes per cell value in the dataset
+#' @return A custom function of \code{scale_color_gradientn()} with colors, values,
+#' and breaks defined. The function will accept additional arguments to \code{scale_color_gradientn()}
+#' @export
+scale_color_genes <- function(max_value){
+  scale_color_manual_rainbow(max_value,
+                             colors = c("blue","deepskyblue","green3", "yellow","orange","red"),
+                             value_breaks = c(0, 500, 1000, 2000, 3000, 4000),
+                             highest_col = "darkred")
 }
 
-scale_color_fct_mito <- function(...){
-  scale_color_gradientn(limits = c(0,1),
-                       colors = c("blue", "green3","yellow","red"),
-                       breaks = c(0,0.25,0.5,0.75,1),...)
+#' Default Color Gradient for UMI per Cell
+#'
+#' Uses \code{} with default values to create a gradient for UMI per cell, with
+#' scale adjusting to observed values
+#'
+#' @param max_value Character value. Highest UMI per cell value in the dataset
+#' @return A custom function of \code{scale_color_gradientn()} with colors, values,
+#' and breaks defined. The function will accept additional arguments to \code{scale_color_gradientn()}
+#' @export
+scale_color_umis <- function(max_value){
+  scale_color_manual_rainbow(max_value,
+                             colors = c("blue","deepskyblue","green3", "yellow","orange","red"),
+                             value_breaks = c(0,1000, 3000, 5000, 7500, 10000),
+                             highest_col = "darkred")
+}
 
 
+#' Default Color Gradient for Fraction Values
+#'
+#' Creates a default color gradient for fractional values using \code{scale_color_gradientn()}
+#'
+#' @param colors Colors for \code{scale_color_gradientn()}.
+#' @param breaks Breaks for \code{scale_color_gradientn()}.
+#' @param ... Additional arguments passed to \code{scale_color_gradientn()}
+#' @return A custom function of \code{scale_color_gradientn()} for fractional values with colors, values,
+#' and breaks defined. The function will accept additional arguments to \code{scale_color_gradientn()}
+#' @export
+scale_color_fct_mito <- function(colors = c("blue", "green3","yellow","red"),
+                                 breaks = c(0,0.25,0.5,0.75,1), ...){
+  ggplot2::scale_color_gradientn(limits = c(0, 1),
+                       colors = colors,
+                       breaks = breaks,...)
+}
+
+#' Seurat 3 Cell Palette
+#'
+#' Color palette with color assigned to each cell type in Seurat v3 labeling
+#' reference (variable_pbmc_10k_v3)
+#'
+#' @return A data frame with columns "seurat3_pbmc_type" and "cell_color"
+#' @export
+seurat_3_cell_palette <- function(){
+  data.frame(seurat3_pbmc_type = c("B cell progenitor", "CD14+ Monocytes", "CD16+ Monocytes",
+                                   "CD4 Memory", "CD4 Naive","CD8 effector", "CD8 Naive",
+                                   "Dendritic cell", "Double negative T cell", "NK cell",
+                                   "pDC", "Platelets", "pre-B cell"),
+             cell_color = c("#FF0000","#FF8C00","#FFEE00","#44FF00", "#00E1FF","#0000FF",
+                            "#E546FA","#F598E5","#008A12", "#803CCF", "#967729", "#B1C4F0",
+                            "#DCF0B1"),
+             stringsAsFactors = FALSE)
 }

@@ -1,0 +1,5 @@
+^inst/rmarkdown/figure$
+^inst/rmarkdown/merged_so_elbow\.Rds$
+^inst/rmarkdown/meta\.Rds$
+^inst/rmarkdown/\.*\.html$
+^testing_code$

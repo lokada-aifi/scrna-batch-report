@@ -1,22 +1,31 @@
-# Rmarkdown formatting helper functions
+# Rmarkdown formatting and QC utility functions
 
 #' Knit a plot as a subchunk
 #'
-#' Knit a plot as a subchunk so its dimensions can be specified individually
+#' Knit a plot as a subchunk so its dimensions can be specified individually. Based
+#' on code found here: http://michaeljw.com/blog/post/subchunkify/
 #'
 #' Allows individual plots within the same chunk to be knit as subchunks with
 #' unique chunk options. Plots can be output in a loop with each plot using
 #' different dimensions, ie dynamic dimensions based on number of x and/or y
-#' category levels. Parent chunk should have options 'results = "as-is"'
+#' category levels. Parent chunk should have chunk options 'results = "as-is"'
+#' to ensure proper output.
 #'
 #' @param g The plot object
-#' @param subchunk_name Unique name of Rmarkdown subchunk to be generated
+#' @param subchunk_name Character value. Unique name of Rmarkdown subchunk to be generated.
+#' @param quiet_knit Logical value, default TRUE. Passed to \code{knitr::knit()}, should the subchunk
+#' be knit "quietly" (no progress bar or messages)
 #' @param chunk_opt_list Named list of chunk options for the subchunk. Can take any chunk
 #' options available to a normal chunk.
 #' @examples
-#' g_example <- ggplot(df(x=1:10, y = 1:10)) + geom_point()
+#' \dontrun{
+#' # This will generate a file in 'figures' subdirectory of working directory
+#' library(ggplot2)
+#' g_example <- ggplot(data.frame(x=1:10, y = 1:10), aes(x, y)) + geom_point()
 #' chunk_opt_l <- list(fig.height=10, fig.width=12, warning=TRUE)
 #' make_subchunk(g_example, "test_chunk", chunk_opt_list = chunk_opt_l)
+#' }
+#'
 
 make_subchunk <- function(g, subchunk_name, quiet_knit = TRUE, chunk_opt_list = list(fig.height=7, fig.width=5, warning = TRUE)) {
   if(is.null(subchunk_name)){
@@ -126,73 +135,51 @@ simple_html_table <- function(labels, values, col_widths_px = c(300, 800), fonts
 }
 
 
-
+#' Format Flags in GT Table
+#'
+#' CURRENTLY NOT USED. Apply standard formatting to "Comments" column of a gt table
+#'
+#' For "Comments" column, will fill cells containing pattern "Warning" in light red
+#' and will fill cells containing pattern "Fail" in dark red.
+#'
+#' @param x A gt table object. Must contain a column named "Comments" with flags "Warning" or "Fail".
+#' @return A gt table object with formatted Comments cells.
+#' @importFrom magrittr %>%
+#' @importFrom rlang .data
+#' @export
+#' @examples
+#' set.seed(1)
+#' vComments <- sample(c("Pass","Warning","Fail",NA), 10, replace = TRUE)
+#' my_gt <- gt::gt(data.frame(X = 1:10, Comments = vComments))
+#' my_gt
+#' gt_fmt_comments(my_gt)
+#' my_gt_nocommments <- gt::gt(data.frame(X = 1:10, CommentsX = vComments))
+#' my_gt_nocommments
+#' \dontrun{gt_fmt_comments(my_gt_nocommments)  # This intentionally generates an error}
 gt_fmt_comments <- function(x) {
+  assertthat::assert_that("Comments" %in% names(x[["_data"]]), msg = "Expect that gt contains flagging column named 'Comments'")
+
   x %>%
     gt::tab_style(
       style = list(
-        cell_fill(color = "red" , alpha = 0.3)
+        gt::cell_fill(color = "red" , alpha = 0.3)
       ),
-      locations = cells_body(
-        columns = vars(Comments),
-        rows = grepl("Warning", Comments))
+      locations = gt::cells_body(
+        columns = gt::vars(Comments),
+        rows = grepl("Warning", .data$Comments))
     ) %>%
     gt::tab_style(
       style = list(
-        cell_fill(color = "red" , alpha = 0.5)
+        gt::cell_fill(color = "red" , alpha = 0.5)
       ),
-      locations = cells_body(
-        columns = vars(Comments),
-        rows = grepl("Fail", Comments))
+      locations = gt::cells_body(
+        columns = gt::vars(Comments),
+        rows = grepl("Fail", .data$Comments))
     )
 }
 
 
-# test_gt_highlight <- function(x, column_name, threshold, highlight_rule = c("gt","lt","gte","lte"), highlight = "red", alpha = 0.3){
-#   highlight_rule <- match.arg(highlight_rule, choices = c("gt","lt","gte","lte"), several.ok = F)
-#
-#   if(highlight_rule == "gt"){
-#     gt::tab_style(data = x,
-#                   style = list(
-#                     cell_fill(color = highlight , alpha = alpha)
-#                   ),
-#                   locations = cells_body(
-#                     columns = vars(column_name),
-#                     rows = column_name > threshold)
-#     )
-#   } else if (highlight_rule == "lt"){
-#     gt::tab_style(data = x,
-#                   style = list(
-#                     cell_fill(color = highlight , alpha = alpha)
-#                   ),
-#                   locations = cells_body(
-#                     columns = vars(column_name),
-#                     rows = column_name < threshold)
-#     )
-#   } else if (highlight_rule == "gte"){
-#     gt::tab_style(data = x,
-#                   style = list(
-#                     cell_fill(color = highlight , alpha = alpha)
-#                   ),
-#                   locations = cells_body(
-#                     columns = vars(rlang::parse_expr(!!column_name)),
-#                     rows = rlang::parse_expr(!!column_name) >= threshold)
-#     )
-#   } else if (highlight_rule == "lte"){
-#     gt::tab_style(data = x,
-#                   style = list(
-#                     cell_fill(color = highlight , alpha = alpha)
-#                   ),
-#                   locations = cells_body(
-#                     columns = vars(column_name),
-#                     rows = column_name <= threshold)
-#     )
-#   }
-#
-# }
-
 # Data summary functions
-
 
 #' Get median and range
 #'
@@ -206,10 +193,15 @@ gt_fmt_comments <- function(x) {
 #' @param add_missing Logical, default TRUE. Should the number of missing values be displayed in brackets
 #' @param verbose Logical, default TRUE. Should a message be printed upon successful calculation, including the number of missing values.
 #' @return String value of formatted median and range. 'median (min-max) [missing]'
+#' @import stats
 #' @export
 #' @examples
 #' my_values <- c(1000:1010,NA)
-#' get_median_range(my_values, digits_round = 1, comma_separate = TRUE, add_missing = TRUE, verbose = TRUE)
+#' get_median_range(my_values,
+#'                  digits_round = 1,
+#'                  comma_separate = TRUE,
+#'                  add_missing = TRUE,
+#'                  verbose = TRUE)
 get_median_range <- function(values, digits_round = 1, comma_separate = TRUE, add_missing = TRUE, verbose = TRUE){
   assertthat::assert_that(mode(values) == "numeric" | all(is.na(values))) # can be any type of numeric, allow calculation if all missing
   assertthat::assert_that(length(values) > 0)
@@ -295,5 +287,73 @@ get_range <- function(values, digits_round = 1, comma_separate = TRUE, add_missi
   }
 
   return(range_string)
+}
+
+#' Determine passing specification
+#'
+#' This function is currently unused. Confirm functionality and modify if needed before use.
+#' Flags numeric values above and/or below supplied upper and lower thresholds.
+#'
+#' @param values Numeric vector of values to evaluate for spec
+#' @param lower_threshold Numeric value that represents the lower limit of acceptable values
+#' @param upper_threshold Numeric value that represents the upper limit of acceptable values
+#' @param digits_round The number of digits that values are to be rounded to before evaluation
+#' @param pass_at_threshold Logical value. Whether or not values equal to threshold should pass, defaults to TRUE.
+#' @param flag_values Vector of length 2 where the first value is the value to be returned for passing/non-flagged values
+#' and the second value is the value to be returned for non-passing/flagged values.
+#' @return Vector of length equal to input values. Output types defined by flag_values parameter
+#' @export
+#' @examples
+#' myvalues <- 1:20
+#' flags <- determine_passing_spec(myvalues,
+#' lower_threshold = 5,
+#' upper_threshold = 18,
+#' pass_at_threshold = TRUE)
+#' flags
+#' flags2 <- determine_passing_spec(myvalues,
+#' lower_threshold = 5,
+#' upper_threshold = 18,
+#' pass_at_threshold = FALSE)
+#' flags2
+determine_passing_spec <- function(values, lower_threshold = NULL, upper_threshold = NULL, digits_round = NULL, pass_at_threshold = TRUE, flag_values = c(FALSE,TRUE)){
+  assertthat::assert_that(mode(values) == "numeric")
+  assertthat::assert_that(length(values) >= 1)
+
+  if (is.null(digits_round)){
+    values_round <- values
+  } else {
+    values_round <- round(values, digits_round)
+  }
+
+  qc_flags <- rep(flag_values[1],length(values))
+
+  # Flag values < or <= threshold
+  if (!is.null(lower_threshold)){
+    if (pass_at_threshold){
+      i_low <- which(values_round < lower_threshold)
+    } else {
+      i_low <- which(values_round <= lower_threshold )
+    }
+
+    if (length(i_low) > 0){
+      qc_flags[i_low] <- flag_values[2]
+    }
+  }
+
+  # Flag values > or >= threshold
+  if (!is.null(upper_threshold)){
+    if (pass_at_threshold){
+      i_high <- which(values_round > upper_threshold)
+    } else {
+      i_high <- which(values_round >= upper_threshold )
+    }
+
+    if (length(i_high) > 0){
+      qc_flags[i_high] <- TRUE
+    }
+  }
+
+  return(qc_flags)
+
 }
 
