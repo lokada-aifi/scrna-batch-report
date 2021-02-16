@@ -61,28 +61,39 @@ vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells",
             "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
             "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
             "sequencing_saturation", "total_genes_detected", "valid_barcodes")
+vlabels <- c("Estimated Number of Cells", "Fraction Reads in Cells", 
+            "Mean Reads per Cell", "Median Genes per Cell", "Median UMI per Cell", 
+            "Number of Reads", "Q30 Bases in Barcode (%)", "Q30 Bases in RNA Read (%)", 
+            "Q30 Bases in Sample Index (%)", "Q30 Bases in UMI (%)", "Reads Mapped Antisense to Gene (%)", 
+            "Reads Mapped Confidently to Exonic Regions (%)", "Reads Mapped Confidently to Genome (%)", 
+            "Reads Mapped Confidently to Intergenic Regions (%)",
+            "Reads Mapped Confidently to Intronic Regions (%)", 
+            "Reads Mapped Confidently to Transcriptome (%)", "Reads Mapped to Genome (%)", 
+            "Sequencing Saturation (%)", "Total Genes Detected", "Valid Barcodes (%)")
 n_vars <- length(vnames)
 vartypes <- c(rep("Cells", 5), rep("Sequencing", 5), rep("Mapping", 7),"Sequencing","Cells","Sequencing")
 digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
 
 df_vars <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing","Mapping")),
-                      Spec = vnames,
+                      Variable_name = vlabels,
+                      Variable = vnames,
                       Round = digitsRound)
 
 well_summary_table <- well_info %>% 
-  gather(key = Spec, value = Value, all_of(vnames)) %>% 
-  full_join(df_vars, by = "Spec") %>% 
-  group_by(pool_id, Category, Spec) %>% 
+  gather(key = Variable, value = Value, all_of(vnames)) %>% 
+  full_join(df_vars, by = "Variable") %>% 
+  group_by(pool_id, Category, Variable, Variable_name) %>% 
   summarize(Median = formatC(median(Value, na.rm=T), big.mark = ",", digits = unique(Round), format = "f"),
             Range = get_range(Value, digits = unique(Round), verbose = F), 
             CV = round(sd(Value)/mean(Value)*100,1),
             .groups = "drop") %>% 
-  arrange(pool_id, Category, Spec) %>% ## ensures pools are in order after pivot
-  tidyr::pivot_wider(id_cols = c("Category","Spec"), 
+  arrange(pool_id, Category, Variable_name) %>% ## ensures pools are in order after pivot
+  tidyr::pivot_wider(id_cols = c("Category","Variable","Variable_name"), 
                      names_from = pool_id, 
                      values_from = c("Median","Range","CV"),
-                     names_glue = "{pool_id}_{.value}") %>% 
-  mutate( Plot = sprintf("[Plot](#%s)", Spec))
+                     names_glue = "{pool_id}__{.value}") %>% 
+  mutate( Plot = sprintf("[Plot](#%s)", Variable)) %>% 
+  select(-Variable)
 
 # well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
 well_summary_table_comments <- well_summary_table
@@ -95,25 +106,21 @@ gt_table <- well_summary_table_comments %>%
   gt::gt() %>% 
   gt::fmt_markdown(columns = "Plot") %>% # convert the plot column text to markdown to activate links. these links generated with plots below.
   gt::cols_width(vars(Category) ~ px(100),
-                 vars(Spec) ~ px(375),
+                 vars(Variable_name) ~ px(375),
                  ends_with("Median") ~ px(125),
                  ends_with("Range") ~ px(150),
                  ends_with("CV") ~ px(50),
                  vars(Plot) ~ px(60)) %>% 
-  gt:: tab_spanner_delim(delim = "_") %>% 
+  gt:: tab_spanner_delim(delim = "__") %>% 
   gt::cols_align(align = "right",
                  columns = c(ends_with("Median"), ends_with("Range"))) %>% 
   gt::cols_align(align = "center",
-                 columns = vars(Plot)) 
+                 columns = vars(Plot)) %>% 
+  gt::cols_label(Variable_name = "Variable")
+
 # names(gt_table$`_data`) 
 gt_table
   
-  # gt::fmt_number(columns = vars(CV), pattern = "{x}%", decimals = 1) %>% 
-  # gt::cols_width(vars(Spec)~pct(50),vars(Median)~pct(12),vars(Range)~pct(17),vars(Inter_Well_CV)~pct(15),vars(Plot)~pct(6)) %>% 
-  # gt::cols_label(
-  #   Inter_Well_CV = grep("CV", names(well_summary_table_comments), value = T)
-  # )
-
 ```  
   
   
@@ -128,6 +135,7 @@ verpal <- hcl.colors(n = n_vars, palette = "viridis")
 for (i in seq_along(vnames)){
   df <- data.table::copy(well_info)
   spec <- vnames[i]
+  slabel <- vlabels[i]
   df <- as.data.frame(df)
   df$spec_col <- df[,spec]
   med_val <- median(df$spec_col)
@@ -136,13 +144,12 @@ for (i in seq_along(vnames)){
   
   g <- ggplot(df, aes(well_id, spec_col)) +
     geom_bar(stat = "identity", fill = verpal[i]) + 
-    bar_theme() +
     geom_hline(yintercept = med_val, linetype = "dashed", color = "red")+
     scale_y_continuous(sec.axis = dup_axis(breaks = med_val, labels = med_val, name = ""))+
     xlab("Well") +
-    ylab(stringr::str_to_title(gsub("_"," ",spec))) +
+    ylab(slabel) +
     facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE) +
-    ggtitle(stringr::str_to_title(gsub("_"," ",spec)), 
+    ggtitle(slabel, 
             subtitle = sprintf("Median=%s    CV=%.1f%%    N=%s", med_val, cv, n)) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
   

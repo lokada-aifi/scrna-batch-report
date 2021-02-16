@@ -4,15 +4,25 @@
 \alias{read_hto_well_json}
 \title{Read in HTO Processing JSON Files}
 \usage{
-read_hto_well_json(fp)
+read_hto_well_json(fp, sample_column_name = "pbmc_sample_id")
 }
 \arguments{
 \item{fp}{Full file path to a single json file to be read. JSON files are generated
 by the AIFI pipeline}
+
+\item{sample_column_name}{Name to use for the sample id's. Ie for pbmc runs use
+"pbmc_sample_id" (default) since the pipeline uses this column name in the metadata. Column
+name may be different in future for other sample types.}
 }
 \value{
 A data frame of select hashing information for each well and HTO
 }
 \description{
 Read in HTO Processing JSON Files
+}
+\examples{
+raw_json <- system.file("extdata/X002/hash/X002-P1C1W4_hto_processing_metrics.json",
+package = "batchreporter")
+df_json <- read_hto_well_json(raw_json)
+head(df_json)
 }

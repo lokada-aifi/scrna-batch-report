@@ -17,6 +17,7 @@
 #' be knit "quietly" (no progress bar or messages)
 #' @param chunk_opt_list Named list of chunk options for the subchunk. Can take any chunk
 #' options available to a normal chunk.
+#' @export
 #' @examples
 #' \dontrun{
 #' # This will generate a file in 'figures' subdirectory of working directory

@@ -43,8 +43,17 @@ read_h5_well_meta <- function (h5_file, target = "well") {
 #'
 #' @param fp Full file path to a single json file to be read. JSON files are generated
 #' by the AIFI pipeline
+#' @param sample_column_name Name to use for the sample id's. Ie for pbmc runs use
+#' "pbmc_sample_id" (default) since the pipeline uses this column name in the metadata. Column
+#' name may be different in future for other sample types.
 #' @return A data frame of select hashing information for each well and HTO
-read_hto_well_json <- function(fp){
+#' @export
+#' @examples
+#' raw_json <- system.file("extdata/X002/hash/X002-P1C1W4_hto_processing_metrics.json",
+#' package = "batchreporter")
+#' df_json <- read_hto_well_json(raw_json)
+#' head(df_json)
+read_hto_well_json <- function(fp, sample_column_name = "pbmc_sample_id"){
   assertthat::assert_that(length(fp) == 1)
 
   json_list <- jsonlite::read_json(fp)
@@ -52,7 +61,8 @@ read_hto_well_json <- function(fp){
   well_id <- json_list$well_id
   sample_stats_list <- json_list$pbmc_sample_hto_stats
   sample_stats_df_list <- lapply(seq_along(sample_stats_list), function(i){
-    df <- data.frame(pbmc_sample_id = names(sample_stats_list)[i])
+    df <- data.frame(names(sample_stats_list)[i])
+    names(df)[1] <- sample_column_name
     stats_list <- lapply(sample_stats_list[[i]], function(x){
       ifelse(is.null(x),NA, x)
     })

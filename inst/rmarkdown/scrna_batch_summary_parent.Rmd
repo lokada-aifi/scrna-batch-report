@@ -15,10 +15,11 @@ params:
   out_dir: NULL
   n_cores: NULL
 ---
+
 <details>  
   <summary>Preprocessing Code</summary> 
   
-```{r setup, echo = FALSE, include = TRUE}
+```{r setup, include = TRUE}
 # Load Libraries
 start_time <- Sys.time()
 
@@ -26,12 +27,11 @@ options(warn = 1)  # output warnings as they appear for traceability in stdout/s
 
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE) # warnings will go to console
 
-# TODO: add this function to rmarkdown utility functions
 quiet_library <- function(...) {
   suppressPackageStartupMessages(library(...))
 }
 
-# quiet_library(batchreporter)
+quiet_library(batchreporter)
 quiet_library(Matrix)        # dependency of H5weaver
 quiet_library(rhdf5)         # dependency of H5weaver
 quiet_library(H5weaver)      # aifi package
@@ -46,9 +46,6 @@ quiet_library(tidyr)         # data wrangling
 quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
-
-for(i in dir("~/Packages/scrna-batch-report/R", full.names = T)) source(i)  ## UPDATE THIS WHEN PACKAGE IS MADE
-# for(i in dir("/home/jupyter/scrna-batch-report/R", full.names = T)) source(i) 
 
 stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))
 ```  
@@ -70,6 +67,7 @@ stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n
 
 ```{r variable_definitions}
 fct_mito_umi_threshold <- 0.10
+sample_column_name <- "pbmc_sample_id"
 
 par_mb_limit <- 50000
 options('future.globals.maxSize' = par_mb_limit*1024^2)
@@ -81,20 +79,21 @@ if(is.null(params$n_cores)) {
 ```
 
 
-```{r Parse arguments}
+```{r parse_arguments}
 if(is.null(params$in_dir)) {
-  # in_dir <- system.file("extdata/X002", package = "batchreporter")
-  in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
-  # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
-
   batch <- "X002"
-  # in_key <- system.file("extdata/example_sample_key_X002.csv", package = "batchreporter")
-  in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key_X002.csv"
+  in_dir <- system.file("extdata/X002", package = "batchreporter")
+  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
+  # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
+  
+  
+  in_key <- system.file("extdata/example_sample_key_X002.csv", package = "batchreporter")
+  # in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key_X002.csv"
   # in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
   out_dir <- tempdir()
 } else {
-  in_dir <- params$in_dir
   batch <-  params$batch
+  in_dir <- params$in_dir
   in_key <- params$in_key
   out_dir <- params$out_dir
 }
@@ -113,7 +112,7 @@ stm(paste0("OUT Dir: ", out_dir))
 all_labeled_h5 <- list.files(path = file.path(in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
 all_hto_json <- list.files(path = file.path(in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
 all_multiplet_h5 <- list.files(path = file.path(in_dir,"multiplet_h5"), pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
-all_control <- list.files(path = file.path(in_dir,"control"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+all_control_h5 <- list.files(path = file.path(in_dir,"control"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
 
 stm(paste0("IN Labeled H5 Files  :\n\t", paste(all_labeled_h5, collapse = "\n\t")))
 stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
@@ -125,13 +124,14 @@ stm(paste0("IN Control Labeled H5 Files:\n\t", paste(all_control_h5, collapse = 
 ```{r read_key, include = FALSE}
 stm("Reading in sample key")
 df_key <- data.table::fread(in_key)
+has_controls <- any(grepl("Control", df_key$Type))
 
 assertthat::assert_that(length(unique(df_key$BatchID)) == 1, msg = "More than 1 batch in input sample key file")
 assertthat::assert_that(batch == unique(df_key$BatchID), msg = "Batch in input key file does not match input batch value")
 
 ```
 
-```{r scrna_seq_child, child = system.file("inst/rmarkdown/scrna_metadata_module.Rmd", package = "batchreporter")}
+```{r scrna_seq_child, child = system.file("rmarkdown/scrna_metadata_module.Rmd", package = "batchreporter")}
 
 ```
 
@@ -148,33 +148,11 @@ setDT(all_control)
 remove("control_meta_list")
 
 all_control[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
-all_control[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-all_control[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
+all_control[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+all_control[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, sample_pool)]
 
 ```
 
-
-```{r add_vars_meta }
-# meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
-# meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
-#                                          paste0(">",fct_mito_umi_threshold),
-#                                          paste0("<=",fct_mito_umi_threshold)))]
-# meta[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-# meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, pbmc_sample_pool)]
-# 
-# 
-# all_meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
-# all_meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
-#                                              paste0(">",fct_mito_umi_threshold),
-#                                              paste0("<=",fct_mito_umi_threshold)))]
-# all_meta[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-# all_meta[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
-# all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
-# 
-# all_control[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
-# all_control[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-# all_control[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
-```
 </details>
 
 ## Batch Information    
@@ -191,7 +169,6 @@ n_wells <- length(wells)
 samples <- unique(df_key$SampleID)
 n_samples <- length(samples)
 
-has_controls <- any(df_key$Type == "Control")
 controls <- df_key$SampleID[df_key$Type == "Control"]
 control_string <- ifelse(has_controls, paste(controls, collapse = ", "), "None")
 
@@ -217,23 +194,22 @@ simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
 
 ## Summary Details {.tabset}  
 
-<a  id="rna_seq_top"></a>  
+<a  id="rna_seq_top"></a> 
+
 ### Well Sequencing and Alignment {.active}  
 
-```{r scrna_seq_child, child = "~/Packages/scrna-batch-report/inst/rmarkdown/scrna_seq_module.Rmd"}
+```{r scrna_seq_child, child =  system.file("rmarkdown/scrna_seq_module.Rmd", package = "batchreporter")}
 ```
   
 ### Cell Hashing 
 
-```{r scrna_seq_child, child = "~/Packages/scrna-batch-report/inst/rmarkdown/scrna_hashing_module.Rmd"}
+```{r scrna_seq_child, child = system.file("rmarkdown/scrna_hashing_module.Rmd", package = "batchreporter")}
 ```
 
 
 ### Quality Metrics 
 
-```{r scrna_seq_child, child = "~/Packages/scrna-batch-report/inst/rmarkdown/scrna_quality_module.Rmd"}
-```
-
+Metrics shown for all singlet cells post un-hashing.  
 
 <a id="top_quality_metrics"></a> 
   
@@ -241,7 +217,7 @@ simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
 meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf), 
                            labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))
 
-g_bar <- ggplot(meta, aes(pbmc_sample_pool,  fill = fct_mito_group))+
+g_bar <- ggplot(meta, aes(sample_pool,  fill = fct_mito_group))+
   geom_bar() +
   labs(fill = "Fraction Mitochondrial UMIs") +
   ylab("N Cells") +
@@ -250,6 +226,11 @@ g_bar <- ggplot(meta, aes(pbmc_sample_pool,  fill = fct_mito_group))+
 
 g_pl <- plotly::ggplotly(g_bar) %>%
   layout(hovermode = 'compare')
+
+tempwidth <- n_samples*0.5 + 2
+
+make_subchunk(g_pl, subchunk_name = "fraction_mito_subchunk", quiet_knit = T,
+              chunk_opt_list = list(fig.width = tempwidth, fig.height = 6))
 
 
 ```   
@@ -489,7 +470,7 @@ g6 <- plot_umap_report(df = umapDF,
 
 # Sample
 stm("Plotting Sample ID UMAP")
-cols_sample <- immutils::varibow(n_colors = length(unique(umapDF$pbmc_sample_id)))
+cols_sample <- immutils::varibow(n_colors = length(unique(umapDF[,sample_column_name])))
 scale_color_sample <- function(...){
     scale_color_manual(values = cols_sample, ...)
 }
@@ -501,7 +482,7 @@ g7 <- plot_umap_report(df = umapDF,
                  y_lab = "UMAP 2",
                  title = "Sample ID",
                  point_size = point_size,
-                 color_col = "pbmc_sample_id",
+                 color_col = sample_column_name,
                  scale_color_fun = scale_color_sample
 )
 
@@ -761,7 +742,7 @@ cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
 <a id="top_control"></a> 
 
-```{r control_summary}
+```{r control_summary, eval=has_controls}
 all_control <- all_control %>% 
   mutate(control_type = ifelse(batch_id == batch, "new", "reference")) 
 by_control <- all_control %>% 
@@ -779,7 +760,7 @@ by_control <- all_control %>%
 
 ```  
 
-```{r control_label_counts}
+```{r control_label_counts, eval=has_controls}
 lab_order <- sort(table(all_control$seurat_pbmc_type[all_control$control_type=="reference"]), decreasing = TRUE)
 all_control <- all_control %>% 
   mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = names(lab_order)))
@@ -794,34 +775,34 @@ ctrl_by_type <- all_control %>%
   mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = unique(seurat_pbmc_type)))
 
 qc_aligned_barplot(meta=all_control, category_x = "seurat_pbmc_type", name_x = "Cell Label",
-                   category_y = "control_type", name_y = "N Cells",colorset_y = "rainbow", category_name = "control_type")
+                   category_y = "batch_id", name_y = "N Cells",colorset_y = "rainbow", category_name = "Batch")
 
-ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)))) +
-  geom_bar(aes(fill = control_type, group = pool_id), position = "dodge") +
-  theme(axis.text.x = element_text(angle = 90)) +
-  facet_wrap(~control_type, nrow = 2) +
-  ggtitle("Count Cell Types") +
-  ylab("N All Cells") +
-  xlab("Cell Label") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-        text = element_text(size = 12))
-
-ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)), group = pool_id)) +
-  geom_bar(aes(y = ..count../sum(..count..), fill = control_type), position = "dodge") +
-  theme(axis.text.x = element_text(angle = 90)) +
-  facet_wrap(~control_type, nrow = 2) +
-  ggtitle("Count Cell Types") +
-  ylab("N All Cells") +
-  xlab("Cell Label") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-        text = element_text(size = 12))
+# ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)))) +
+#   geom_bar(aes(fill = control_type, group = pool_id), position = "dodge") +
+#   theme(axis.text.x = element_text(angle = 90)) +
+#   facet_wrap(~control_type, nrow = 2) +
+#   ggtitle("Count Cell Types") +
+#   ylab("N All Cells") +
+#   xlab("Cell Label") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+#         text = element_text(size = 12))
+# 
+# ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)), group = pool_id)) +
+#   geom_bar(aes(y = ..count../sum(..count..), fill = control_type), position = "dodge") +
+#   theme(axis.text.x = element_text(angle = 90)) +
+#   facet_wrap(~control_type, nrow = 2) +
+#   ggtitle("Count Cell Types") +
+#   ylab("N All Cells") +
+#   xlab("Cell Label") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+#         text = element_text(size = 12))
 ```    
 
 [Return to Top](#top_control)   
 
-```{r control_pct_counts, fig.width = 10, class.output = "superbigimage"}
+```{r control_pct_counts, fig.width = 10, class.output = "superbigimage", eval=has_controls}
 g <- ggplot(ctrl_by_type, aes(seurat_pbmc_type, y = pct)) +
   geom_bar(aes(fill = control_type), position = "dodge", stat = "identity")  +
   ggtitle("Percent Cells by Label") +
@@ -838,7 +819,7 @@ ggplotly(g) %>%
 
 [Return to Top](#top_control)   
   
-```{r umap_control}
+```{r umap_control, eval=has_controls}
 stm("Reading and merging all control count matrices")
 # Merge the count matrices for all samples into 1 table
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
@@ -861,7 +842,7 @@ if(!all_same_features){
 
 ```   
 
-```{r seurat_normalize_ctrl}
+```{r seurat_normalize_ctrl, eval=has_controls}
 # Create Seurat object
 stm("Creating Seurat object from merged data")
 ctrl_so <- Seurat::CreateSeuratObject(counts = all_ctrl_mat)
@@ -879,7 +860,7 @@ normCountsctrl <- ctrl_so[["RNA"]]@data
 ```
 
 
-```{r PCA_ctrl}
+```{r PCA_ctrl, eval=has_controls}
 # Run PCA on variable features for first 50 PCs
 pc_dims_ctrl <- min(ncol(ctrl_so) - 1, 50)
 
@@ -896,7 +877,7 @@ ctrl_so <- RunPCA(object = ctrl_so, npcs = pc_dims_ctrl, verbose = FALSE)
 ```  
 
 
-```{r Jackstraw_ctrl, message = FALSE}
+```{r Jackstraw_ctrl, message = FALSE, eval=has_controls}
 stm("Determining dimensionality via jackstraw method control")
 
 labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
@@ -925,11 +906,13 @@ var_selected_pc_ctrl <- sum(pc_var_ctrl[good_pcs_ctrl])/total_var_ctrl
 cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
 
 stm(sprintf("Selected %s significant pcs via jackstraw, %s%% explained variation", nPC_ctrl, cumvar_string_ctrl))
-```
+```  
 
-Batch Control UMAP using `r {nPC_ctrl}` principal components (`r {cumvar_string_ctrl}`% explained variance).  
+```{r eval=has_controls, results="asis"}
+"Batch Control UMAP using `r {nPC_ctrl}` principal components (`r {cumvar_string_ctrl}`% explained variance)."
+```  
 
-```{r merged_umap_ctrl}
+```{r merged_umap_ctrl, eval=has_controls}
 # Run UMAP
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 stm("Running UMAP on selected coordinates...")
@@ -944,7 +927,7 @@ ctrl_so <- Seurat::RunUMAP(ctrl_so,
 ```
 
 
-```{r umap_cleanup_ctrl}
+```{r umap_cleanup_ctrl, eval=has_controls}
 # Get UMAP coordinates
 umapDF_ctrl <- ctrl_so[["umap"]]@cell.embeddings %>%
   as.data.frame() %>%
@@ -961,7 +944,7 @@ if(!all(rownames(umapDF_ctrl) == colnames(normCountsctrl))){
 
 ```   
 
-```{r umap_quality_ctrl,  results = "asis", fig.height = 20, fig.width = 20, class.output = "superbigimage"}
+```{r umap_quality_ctrl,  results = "asis", fig.height = 20, fig.width = 20, class.output = "superbigimage", eval=has_controls}
 stm("Plotting Control UMAP by Data Quality Metrics")
 
 # Gene scaling
@@ -1054,8 +1037,6 @@ cowplot::plot_grid(aligned_plots[[1]],
 #   ) 
 
 ```  
-
-
 
 ### Session Information 
 <a id="top_session_info"></a>  

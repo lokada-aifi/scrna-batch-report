@@ -29,10 +29,10 @@ if(!exists("well_hto_json_df")){
   well_hto_json_list <- future_lapply(all_hto_json, read_hto_well_json)
   well_hto_json_df <- do.call(rbind, well_hto_json_list)
   well_hto_json_df <- well_hto_json_df %>% 
-    dplyr::mutate(sample_hto = paste(hto_barcode, pbmc_sample_id, sep = "\n")) %>% 
+    dplyr::mutate(sample_hto = paste(hto_barcode, get(sample_column_name), sep = "\n")) %>% 
     dplyr::mutate(pool_id_short = gsub(".*-", "", gsub("C.*","", well_id))) %>% 
     dplyr::mutate(pool_id = gsub("C.*","", well_id)) %>% 
-    dplyr::mutate(sample_pool = paste(pbmc_sample_id, pool_id_short, sep = "_")) %>% 
+    dplyr::mutate(sample_pool = paste(get(sample_column_name), pool_id_short, sep = "_")) %>% 
     dplyr::mutate(sample_pool_hto = paste(sample_pool, hto_barcode, sep = "\n")) 
   
   remove("well_hto_json_list")
@@ -135,7 +135,7 @@ pools <- unique(all_hash_fmt$pool_id)
 ```  
 
 
-```{r all_hto_counts}
+```{r all_hto_counts, results="asis"}
 hash_by_well <- all_hash_fmt %>% 
   group_by(pool_id,well_id, hto,sample_pool_hto) %>% 
   summarize(hto_count = sum(count),.groups = "drop") 
@@ -313,7 +313,7 @@ make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk",
     
 #### HTO Category Fraction by Well  
 
-```{r hto_cat_fractions}
+```{r hto_cat_fractions, results="asis"}
 stm("Plotting hto category fraction per well")
 
 g <- qc_stacked_barplot_facet(all_meta,
@@ -340,7 +340,7 @@ make_subchunk(g, subchunk_name = "hto_cat_fraction_subchunk",
 
 ##### HTO Barcode Count per Well Plot  
 
-```{r hto_counts_well, class.output = "superbigimage"}
+```{r hto_counts_well, class.output = "superbigimage", results="asis"}
 stm("Plotting barcode count per well and hto")
 
 plot_list <- list()
@@ -372,7 +372,7 @@ make_subchunk(g, subchunk_name = "hto_cat_count_subchunk",
   
 ##### HTO Barcode Fraction per Well Plot  
 
-```{r hto_fraction_well}
+```{r hto_fraction_well, results="asis"}
 stm("Plotting barcode fraction per well and hto")
 
 plot_list <- list()
@@ -403,7 +403,7 @@ make_subchunk(g, subchunk_name = "hto_fraction_subchunk",
   
 ##### Well Count per HTO Barcode Plot  
 
-```{r Well Count By HTO Barcode Plot}
+```{r Well Count By HTO Barcode Plot, results="asis"}
 stm("Plotting well count per hto")
 
 plot_list <- list()
@@ -422,7 +422,7 @@ for (i in seq_along(pools)){
 g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 temp_figwidth <- (1.2*n_wells + 0.5*n_pools + 3)
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
-make_subchunk(g, subchunk_name = "hto_count_subchunk", 
+make_subchunk(g, subchunk_name = "well_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
@@ -431,7 +431,7 @@ make_subchunk(g, subchunk_name = "hto_count_subchunk",
 [Return to Top](#top_cell_hashing)  
   
 ##### Well Fraction per HTO Barcode Plot  
-```{r Well Fraction By HTO Barcode Plot}
+```{r Well Fraction By HTO Barcode Plot, results="asis"}
 stm("Plotting well fraction per hto")
 
 plot_list <- list()
@@ -489,7 +489,7 @@ plot_grid(plotlist = reads_violin_list,
   
 [Return to Top](#top_cell_hashing)  
   
-```{r umi_counts}
+```{r umi_counts, height = 5, width = 12}
 # UMI per category plot
 stm("Generating umi count violin plots")
 category_umis_violins <- qc_violin_plot(all_meta,
@@ -523,7 +523,7 @@ plot_grid(plotlist = umis_violin_list,
   
 [Return to Top](#top_cell_hashing)  
   
-```{r gene_counts }
+```{r gene_counts, height = 5, width = 12}
 # Genes per category plot
 category_genes_violins <- qc_violin_plot(all_meta,
                                          category_x = "hto_category",

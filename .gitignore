@@ -13,3 +13,4 @@ inst/rmarkdown/meta.Rds
 testing_code/
 inst/rmarkdown/figure
 testing_code
+inst/rmarkdown/scrna_batch_summary_parent.html

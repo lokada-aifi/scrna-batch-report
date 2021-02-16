@@ -1,5 +1,5 @@
 <!-- # Child Rmarkdown Document for scrna metadata formatting -->
-Reads in metadata from labeled h5 file, adds back in metadata from multiplets
+<!-- Reads in metadata from labeled h5 file, adds back in metadata from multiplets -->
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
 
 ```{r rna_metadata_files}
@@ -44,16 +44,16 @@ meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                          paste0(">",fct_mito_umi_threshold),
                                          paste0("<=",fct_mito_umi_threshold)))]
-meta[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, pbmc_sample_pool)]
+meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, sample_pool)]
 
 
 all_meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 all_meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                              paste0(">",fct_mito_umi_threshold),
                                              paste0("<=",fct_mito_umi_threshold)))]
-all_meta[ , pbmc_sample_pool:= sprintf("%s_%s", pbmc_sample_id, pool_id)]
-all_meta[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, pbmc_sample_pool)]
+all_meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+all_meta[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, sample_pool)]
 all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
 
 ```
