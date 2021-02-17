@@ -206,14 +206,14 @@ simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
 ```
 
 
-### Quality Metrics 
+### Quality Metrics
 
-Metrics shown for all singlet cells post un-hashing.  
+Metrics shown for all singlet cells post un-hashing.
 
-<a id="top_quality_metrics"></a> 
-  
+<a id="top_quality_metrics"></a>
+
 ```{r pct_mito}
-meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf), 
+meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf),
                            labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))
 
 g_bar <- ggplot(meta, aes(sample_pool,  fill = fct_mito_group))+
@@ -221,7 +221,7 @@ g_bar <- ggplot(meta, aes(sample_pool,  fill = fct_mito_group))+
   labs(fill = "Fraction Mitochondrial UMIs") +
   ylab("N Cells") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
 
 g_pl <- plotly::ggplotly(g_bar) %>%
   layout(hovermode = 'compare')
@@ -232,10 +232,10 @@ make_subchunk(g_pl, subchunk_name = "fraction_mito_subchunk", quiet_knit = T,
               chunk_opt_list = list(fig.width = tempwidth, fig.height = 6))
 
 
-```   
-  
-[Return to Top](#top_quality_metrics)  
-  
+```
+
+[Return to Top](#top_quality_metrics)
+
 ```{r combine count matrices for all samples}
 stm("Reading and merging all count matrices")
 
@@ -250,7 +250,7 @@ all_counts_cells_bc <- meta$original_barcodes
 featDF <- read_h5_feature_meta(all_labeled_h5[1])
 
 rm("all_counts_list")
-```  
+```
 
 ```{r seurat_normalize}
 # Create Seurat object
@@ -260,14 +260,14 @@ merged_so <- Seurat::CreateSeuratObject(counts = all_counts_mat)
 # Normalize data
 stm("Normalizing data")
 future::plan("sequential")  # reverting to sequential to avoid error (can use if figure out workaround)
-merged_so <- Seurat::NormalizeData(object = merged_so, 
+merged_so <- Seurat::NormalizeData(object = merged_so,
                                    normalization.method = "LogNormalize",
                                    scale.factor = 10000,
                                    margin = 1)
 
 normCounts <- merged_so[["RNA"]]@data
 
-```  
+```
 
 ```{r PCA}
 pc_dims <- min(ncol(merged_so) - 1, 50)
@@ -281,19 +281,19 @@ stm("Scaling Data")
 merged_so <- ScaleData(object = merged_so, verbose = FALSE)
 
 stm("Running PCA")
-merged_so <- RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)  
+merged_so <- RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)
 
 # save pca object
 # saveRDS(merged_so, file = "merged_so_pcaresults.rds")
 # merged_so <- readRDS("merged_so_pcaresults.rds")
- 
-```  
+
+```
 
 ```{r jackstraw_pc_selection, message = FALSE}
 stm("Determining dimensionality via jackstraw method")
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
-sample_cells <- function(cl, 
-                          sample.size, 
+sample_cells <- function(cl,
+                          sample.size,
                           seed = 3030) {
   cl.cells <- split(names(cl), cl)
   sampled.cells <- sapply(names(cl.cells), function(x) {
@@ -302,7 +302,7 @@ sample_cells <- function(cl,
       return(cells)
     }
     to.sample <- pmin(sample.size, length(cells))
-    
+
     set.seed(seed)
     sample(cells, to.sample)
   }, simplify = FALSE)
@@ -339,7 +339,7 @@ stm(sprintf("Selected %s significant pcs via JackStraw, %s%% explained variation
 pc_embeddings <- merged_so@reductions$pca@cell.embeddings
 
 # stm(sprintf("Using %s principal components for umap",nPC))
-```  
+```
 
 ```{r merged_umap}
 # Run UMAP
@@ -391,11 +391,11 @@ if(!all(rownames(umapDF) == colnames(normCounts))){
   stop("Merged UMAP dataframe does not match columns in normalized counts")
 }
 
-```   
+```
 
-#### Data Quality UMAP  
+#### Data Quality UMAP
 
-Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) selected by jackstraw.  
+Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) selected by jackstraw.
 
 ```{r umap_quality,  results = "asis", fig.height = 30, fig.width = 20, class.output = "superbigimage"}
 stm("Plotting Batch UMAP by Data Quality Metrics")
@@ -408,7 +408,7 @@ point_size <- 0.2
 
 
 # Cell Types
-g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged)) 
+g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged))
 
 # fraction mitochondrial umi
 stm("Plotting Fraction Mito UMAP")
@@ -424,7 +424,7 @@ g3 <- plot_umap_report(df = umapDF,
 
 # N Genes
 stm("Plotting N Genes UMAP")
-g4 <- plot_umap_report(df = umapDF, 
+g4 <- plot_umap_report(df = umapDF,
                  x_col="UMAP_1_merged",
                  x_lab = "UMAP 1",
                  y_col = "UMAP_2_merged",
@@ -437,7 +437,7 @@ g4 <- plot_umap_report(df = umapDF,
 
 # N UMIs
 stm("Plotting N UMIs UMAP")
-g5 <- plot_umap_report(df = umapDF, 
+g5 <- plot_umap_report(df = umapDF,
                  x_col="UMAP_1_merged",
                  x_lab = "UMAP 1",
                  y_col = "UMAP_2_merged",
@@ -456,7 +456,7 @@ cols_well <- immutils::varibow(n_colors = length(unique(umapDF$well_id)))
 scale_color_well <- function(...){
     scale_color_manual(values = cols_well, ...)
 }
-g6 <- plot_umap_report(df = umapDF, 
+g6 <- plot_umap_report(df = umapDF,
                  x_col="UMAP_1_merged",
                  x_lab = "UMAP 1",
                  y_col = "UMAP_2_merged",
@@ -474,7 +474,7 @@ scale_color_sample <- function(...){
     scale_color_manual(values = cols_sample, ...)
 }
 
-g7 <- plot_umap_report(df = umapDF, 
+g7 <- plot_umap_report(df = umapDF,
                  x_col="UMAP_1_merged",
                  x_lab = "UMAP 1",
                  y_col = "UMAP_2_merged",
@@ -486,7 +486,7 @@ g7 <- plot_umap_report(df = umapDF,
 )
 
 
-aligned_plots <- cowplot::align_plots(g3, g4, g5, g6, g7, align = "hv", axis = "tblr")  # uniform plot sizing 
+aligned_plots <- cowplot::align_plots(g3, g4, g5, g6, g7, align = "hv", axis = "tblr")  # uniform plot sizing
 
 cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
@@ -495,21 +495,21 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[5]],
                    ncol = 2)
 
-```  
-  
-[Return to Top](#top_quality_metrics)  
+```
+
+[Return to Top](#top_quality_metrics)
 
 
-### Cell Labeling  
+### Cell Labeling
 
-<a id="top_cell_labeling"></a> 
+<a id="top_cell_labeling"></a>
 
-#### Seurat Labeling Scores  
+#### Seurat Labeling Scores
 
 ```{r cell_labeling, fig.height = 8, fig.width = 20}
 stm("Plotting Seurat labeling score distributions")
 
-cell_type_palette <- seurat_3_cell_palette()
+cell_type_palette <- batchreporter::seurat_3_cell_palette()
 
 # quality scores by sample
 # meta_sample <- meta[ ,.(median_quality = median(seurat_pbmc_type_score)), by = pbmc_sample_id]
@@ -526,38 +526,38 @@ ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
   facet_wrap( ~ seurat_pbmc_type, ncol= 1) +
   scale_fill_manual(values = cell_type_palette$cell_color, labels = cell_type_palette$seurat3_pbmc_type) +
   theme_bw() +
-  theme(title = element_text(size = 24), 
+  theme(title = element_text(size = 24),
         legend.text = element_text(size = 18),
         strip.text = element_text(size = 20, face = "bold"),
         axis.text = element_text(size = 14),
         axis.title = element_text(size = 20))+
   facet_wrap(~seurat_pbmc_type, scales = "free_y")
 
-```  
-    
-[Return to Top](#top_cell_labeling)  
+```
 
-#### UMAP All Cells  
+[Return to Top](#top_cell_labeling)
 
-Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) selected by jackstraw.  
+#### UMAP All Cells
+
+Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) selected by jackstraw.
 
 ```{r umap_labels,  esults = "asis", fig.height = 18, fig.width = 20, class.output = "superbigimage"}
 point_size <- 0.2
 
 # Cell Types
-g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged)) 
+g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged))
 
 stm("Plotting cell type UMAP")
 g1 <- g_base +
   geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
   ggtitle("Cell Labels")+
-  scale_color_manual(values = cell_type_palette$cell_color, 
+  scale_color_manual(values = cell_type_palette$cell_color,
                      breaks = cell_type_palette$seurat3_pbmc_type) +
   theme_bw() +
   theme(aspect.ratio = 1/1,
-        title = element_text(size = 20), 
+        title = element_text(size = 20),
         legend.key.size = unit(1, 'lines'),
-        legend.text = element_text(size = 14)) + 
+        legend.text = element_text(size = 14)) +
   guides(colour = guide_legend(override.aes = list(size = 3)))
 
 # Labeling Scores
@@ -581,7 +581,7 @@ g3  <- ggplot(umapDF %>% dplyr::filter(Phase == "G1"), aes(UMAP_1_merged, UMAP_2
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
-        
+
 stm("Plotting Cell Cycle Score UMAP")
 g4  <- ggplot(umapDF %>% dplyr::filter(Phase == "S"), aes(UMAP_1_merged, UMAP_2_merged))  +
   geom_point(alpha = 0.3, size = point_size, color = "forestgreen") +
@@ -600,7 +600,7 @@ g5  <- ggplot(umapDF %>% dplyr::filter(Phase == "G2M"), aes(UMAP_1_merged, UMAP_
         legend.text = element_text(size = 14))
 
 
-aligned_plots <- cowplot::align_plots(g1, g2, g3, g4, g5, align = "hv", axis = "tblr")  # uniform plot sizing 
+aligned_plots <- cowplot::align_plots(g1, g2, g3, g4, g5, align = "hv", axis = "tblr")  # uniform plot sizing
 
 cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
@@ -611,11 +611,11 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ```
 
-[Return to Top](#top_cell_labeling) 
+[Return to Top](#top_cell_labeling)
 
 
 #### UMAP by Fraction Mitochondrial UMI
-  
+
 Removed `r {sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)}` cells (`r {round(sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)/nrow(umapDF)*100,1)}`%)
 
 ```{r cell_labeling_lowmito, fig.height = 20, fig.width = 20}
@@ -632,7 +632,7 @@ g2_mito <- g2 +
   ggtitle("Cell Label Scores by Fraction Mitochondrial UMI")+
   theme(strip.text = element_text(size = 18))
 
-aligned_plots <- cowplot::align_plots(g1_mito, g2_mito, align = "hv", axis = "tblr")  # uniform plot sizing 
+aligned_plots <- cowplot::align_plots(g1_mito, g2_mito, align = "hv", axis = "tblr")  # uniform plot sizing
 
 cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
@@ -640,7 +640,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ```
 
-[Return to Top](#top_cell_labeling)  
+[Return to Top](#top_cell_labeling)
 
 #### Cell Types by Fraction Mitochondrial Read Group
 ```{r cell_labeling_mito_celltypes, fig.height = 10, fig.width = 20}
@@ -681,13 +681,13 @@ label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
 label_scores_mito(umapDF)
 
 ```
-  
-#### Marker Visualization  
-  
+
+#### Marker Visualization
+
 ```{r marker_umap,fig.height = 35, fig.width = 25,  class = "superbigimage"}
 stm("Plotting UMAP of marker genes")
-genes <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A", 
-            "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX", 
+genes <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A",
+            "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX",
            "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
            "FUT4", "ITGAM","FCGR2B","FCER1A")
 cDF <- normCounts
@@ -697,8 +697,8 @@ cDF <- normCounts
 markerDF <- t(cDF[genes, ]) %>% as.data.frame()
 umapDF2 <- umapDF[, c("UMAP_1_merged", "UMAP_2_merged","fct_mito_umi")]
 # table(rownames(markerDF) == rownames(umapDF2))
-umapDF2 <- cbind(umapDF2, markerDF) %>% 
-  tidyr::gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged) 
+umapDF2 <- cbind(umapDF2, markerDF) %>%
+  tidyr::gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged)
 umapDF2$gene <- factor(umapDF2$gene, levels = genes)
 
 # plot UMAP per marker
@@ -706,8 +706,8 @@ marker_umap_l <- list()
 for(G in genes) {
   umapDF3 <- umapDF2 %>% dplyr::filter(gene %in% G)
   marker_umap_l[[G]] <- ggplot(data = umapDF3,
-                               mapping = aes(x = UMAP_1_merged, 
-                                             y = UMAP_2_merged, 
+                               mapping = aes(x = UMAP_1_merged,
+                                             y = UMAP_2_merged,
                                              color = as.numeric(value))) +
     geom_point(size = 0.8) +
     scale_color_gradient(low = "white", high = "red") +
@@ -727,10 +727,10 @@ for(G in genes) {
 
 cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
-```  
+```
 
-[Return to Top](#top_cell_labeling)   
-  
+[Return to Top](#top_cell_labeling)
+
 ### Leukopak Control  
 
 <a id="top_control"></a> 

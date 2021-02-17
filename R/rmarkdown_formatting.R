@@ -11,7 +11,7 @@
 #' category levels. Parent chunk should have chunk options 'results = "as-is"'
 #' to ensure proper output. Note that this will create a "figures" directory in
 #' the directory containing the Rmarkdown file containing the chunk plots. Ensure
-#' that Rmarkdown  yaml has 'self_contained: true' om html document section
+#' that Rmarkdown  yaml has 'self_contained: true' in html document section (or equivalent)
 #'
 #' @param g The plot object
 #' @param subchunk_name Character value. Unique name of Rmarkdown subchunk to be generated.
