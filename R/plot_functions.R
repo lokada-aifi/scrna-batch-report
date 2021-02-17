@@ -65,7 +65,7 @@ qc_stacked_barplot_facet <- function (meta, category_x = "batch_id", name_x = "B
   }
   else if (colorset_y == "varibow") {
     set.seed(3030)
-    plot_fills$fill <- sample(immutils::varibow(nrow(plot_fills)),
+    plot_fills$fill <- sample(H5weaver::varibow(nrow(plot_fills)),
                               nrow(plot_fills))
   }
   plot_fills <- plot_fills[order(plot_fills[[category_y]]),
@@ -169,7 +169,7 @@ qc_aligned_barplot_facet <- function (meta,
   }
   else if (colorset_y == "varibow") {
     set.seed(3030)
-    plot_fills$fill <- sample(immutils::varibow(nrow(plot_fills)),
+    plot_fills$fill <- sample(H5weaver::varibow(nrow(plot_fills)),
                               nrow(plot_fills))
   }
   plot_fills <- plot_fills[order(plot_fills[[category_y]]),

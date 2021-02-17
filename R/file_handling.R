@@ -54,7 +54,7 @@ read_h5_well_meta <- function (h5_file, target = "well") {
 #' df_json <- read_hto_well_json(raw_json)
 #' head(df_json)
 read_hto_well_json <- function(fp, sample_column_name = "pbmc_sample_id"){
-  assertthat::assert_that(length(fp) == 1)
+  assertthat::assert_that(length(fp) == 1, msg = "Input fp is not length 1")
 
   json_list <- jsonlite::read_json(fp)
 

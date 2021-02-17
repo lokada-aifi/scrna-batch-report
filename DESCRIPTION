@@ -15,19 +15,18 @@ Encoding: UTF-8
 Depends:
   R (>= 3.5.0)
 Imports:
-  testthat,
+  assertthat,
   stats,
   data.table,
   dplyr,
   ggplot2,
   gt,
-  immutils,
   plotly,
   htmltools,
   knitr,
   scales,
-  H5weaver (>= 1.0.14),
-  HTOparser,
+  H5weaver (>= 1.0.20),
+  HTOparser (>= 1.0.12),
   parallel,
   rhdf5,
   Seurat,
@@ -36,6 +35,7 @@ Imports:
   magrittr,
   rlang
 Suggests: 
+  testthat
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1

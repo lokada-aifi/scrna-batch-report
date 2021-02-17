@@ -41,7 +41,6 @@ quiet_library(dplyr)         # data wrangling
 quiet_library(cowplot)       # arranging multiple plots
 quiet_library(gt)            # formatted table output
 quiet_library(plotly)        # interactive plots
-quiet_library(immutils)      # general functions, aifi package
 quiet_library(tidyr)         # data wrangling
 quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
@@ -609,12 +608,6 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[4]],
                    aligned_plots[[5]],
                    ncol = 2)
-
-# aligned_plots <- cowplot::align_plots(g1, g2, align = "hv", axis = "tblr")  # uniform plot sizing 
-
-# cowplot::plot_grid(aligned_plots[[1]],
-#                    aligned_plots[[2]],
-#                   ncol = 2)
 
 ```
 
