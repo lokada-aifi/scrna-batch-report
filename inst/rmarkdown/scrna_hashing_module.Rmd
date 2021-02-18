@@ -10,6 +10,12 @@ assertthat::assert_that(length(dir(file.path(rna_in_dir,"hash")))>0)
 ```  
 
 ```{r rna_hash_files}
+hto_key <- system.file("reference/TotalSeqA_human_hto_key.csv", package = "HTOparser")
+in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
+  mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
+  mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% 
+  select(-hto_order)
+
 if(!exists("all_hto_json")){
   all_hto_json <- list.files(path = file.path(in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
   stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
@@ -29,7 +35,9 @@ if(!exists("well_hto_json_df")){
   well_hto_json_list <- future_lapply(all_hto_json, read_hto_well_json)
   well_hto_json_df <- do.call(rbind, well_hto_json_list)
   well_hto_json_df <- well_hto_json_df %>% 
-    dplyr::mutate(sample_hto = paste(hto_barcode, get(sample_column_name), sep = "\n")) %>% 
+    left_join(in_hto_key, by = "hto_barcode") %>% 
+    dplyr::mutate(sample_hto = paste(hto_name, get(sample_column_name), sep = "\n")) %>% 
+    dplyr::mutate(sample_hto = factor(sample_hto[order(sample_hto, pool_id)])) %>% 
     dplyr::mutate(pool_id_short = gsub(".*-", "", gsub("C.*","", well_id))) %>% 
     dplyr::mutate(pool_id = gsub("C.*","", well_id)) %>% 
     dplyr::mutate(sample_pool = paste(get(sample_column_name), pool_id_short, sep = "_")) %>% 

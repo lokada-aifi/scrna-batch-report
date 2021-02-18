@@ -3,3 +3,5 @@
 ^inst/rmarkdown/meta\.Rds$
 ^inst/rmarkdown/\.*\.html$
 ^testing_code$
+^.*\.Rproj$
+^\.Rproj\.user$

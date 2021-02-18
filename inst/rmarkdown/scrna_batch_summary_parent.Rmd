@@ -70,8 +70,12 @@ sample_column_name <- "pbmc_sample_id"
 
 par_mb_limit <- 50000
 options('future.globals.maxSize' = par_mb_limit*1024^2)
+
 if(is.null(params$n_cores)) {
   avail_workers <- as.numeric(future::availableCores()-2)
+  if (avail_workers < 2){
+    avail_workers <- 1
+  }
 } else {
   avail_workers <- params$n_cores 
 }
@@ -84,7 +88,6 @@ if(is.null(params$in_dir)) {
   in_dir <- system.file("extdata/X002", package = "batchreporter")
   # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
   # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
-  
   
   in_key <- system.file("extdata/example_sample_key_X002.csv", package = "batchreporter")
   # in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key_X002.csv"
@@ -100,9 +103,9 @@ if(is.null(params$in_dir)) {
 rna_in_dir <- in_dir
 
 stm(paste0("IN Batch        : ", batch))
-stm(paste0("IN Directory     : ", in_dir))
+stm(paste0("IN Directory    : ", in_dir))
 stm(paste0("IN Sample Key   : ", in_key))
-stm(paste0("OUT Dir: ", out_dir))
+stm(paste0("OUT Dir         : ", out_dir))
 ```  
 
 <!-- Parse Input ----------------------------------------------------------- -->
@@ -212,7 +215,7 @@ Metrics shown for all singlet cells post un-hashing.
 
 <a id="top_quality_metrics"></a>
 
-```{r pct_mito}
+```{r pct_mito, results = "asis"}
 meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf),
                            labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))
 
@@ -370,7 +373,6 @@ df_cc <- merged_so[[]][,c("S.Score", "G2M.Score","Phase")] %>%
 
 ```{r recover_analysis }
 # merged_so <- readRDS("~/Packages/scrna-batch-report/inst/rmarkdown/merged_so_elbow.Rds")
-# merged_so_elbow <- readRDS("merged_so_elbow.Rds")
 ```
 
 

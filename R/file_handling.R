@@ -39,7 +39,7 @@ read_h5_well_meta <- function (h5_file, target = "well") {
   }
 }
 
-#' Read in HTO Processing JSON Files
+#' Read in HTO Processing Metrics JSON Files
 #'
 #' @param fp Full file path to a single json file to be read. JSON files are generated
 #' by the AIFI pipeline
@@ -50,7 +50,7 @@ read_h5_well_meta <- function (h5_file, target = "well") {
 #' @export
 #' @examples
 #' raw_json <- system.file("extdata/X002/hash/X002-P1C1W4_hto_processing_metrics.json",
-#' package = "batchreporter")
+#'                        package = "batchreporter")
 #' df_json <- read_hto_well_json(raw_json)
 #' head(df_json)
 read_hto_well_json <- function(fp, sample_column_name = "pbmc_sample_id"){

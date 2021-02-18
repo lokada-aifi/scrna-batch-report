@@ -2,7 +2,7 @@
 % Please edit documentation in R/file_handling.R
 \name{read_hto_well_json}
 \alias{read_hto_well_json}
-\title{Read in HTO Processing JSON Files}
+\title{Read in HTO Processing Metrics JSON Files}
 \usage{
 read_hto_well_json(fp, sample_column_name = "pbmc_sample_id")
 }
@@ -18,11 +18,11 @@ name may be different in future for other sample types.}
 A data frame of select hashing information for each well and HTO
 }
 \description{
-Read in HTO Processing JSON Files
+Read in HTO Processing Metrics JSON Files
 }
 \examples{
 raw_json <- system.file("extdata/X002/hash/X002-P1C1W4_hto_processing_metrics.json",
-package = "batchreporter")
+                       package = "batchreporter")
 df_json <- read_hto_well_json(raw_json)
 head(df_json)
 }
