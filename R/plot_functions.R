@@ -118,8 +118,10 @@ qc_aligned_barplot_facet <- function (meta,
                                       name_x = "Batch ID",
                                       category_y = "well_id",
                                       category_name = "Well ID",
-                                      colorset_y = "varibow",
                                       name_y = "N Cells", padding = 0.2,
+                                      colorset_y = "varibow",
+                                      stat = "count",
+                                      variable_y_identity = NULL,
                                       facet_formula = NULL, ...) {
   assertthat::assert_that(sum(class(meta) %in% c("data.frame",
                                                  "data.table")) > 0)
@@ -144,15 +146,27 @@ qc_aligned_barplot_facet <- function (meta,
   tidy_x <- rlang::parse_expr(category_x)
   tidy_y <- rlang::parse_expr(category_y)
   meta <- as.data.table(meta)
+
   if(!is.null(facet_formula)){
     formula_cols <- as.character(as.list(facet_formula))
     f_cols <- setdiff(formula_cols, "`~`")
-    count_table <- meta[, .(n_cells = nrow(.SD)), by = mget(c(category_x,
-                                                              category_y, f_cols))]
+    if(stat == "count"){
+      count_table <- meta[, .(counts = nrow(.SD)), by = mget(c(category_x,
+                                                               category_y, f_cols))]
+    }    else if (stat == "identity"){
+      count_table <- meta[, mget(c(category_x,category_y, f_cols, variable_y_identity))]
+      count_table[, counts := get(variable_y_identity)]
+    }
   } else {
-    count_table <- meta[, .(n_cells = nrow(.SD)), by = mget(c(category_x,
+    if(stat == "count"){
+    count_table <- meta[, .(counts = nrow(.SD)), by = mget(c(category_x,
                                                               category_y))]
+    } else if (stat == "identity"){
+      count_table <- meta[, mget(c(category_x,category_y, variable_y_identity))]
+      count_table[, counts := get(variable_y_identity)]
+    }
   }
+
   plot_xpos <- data.frame(unique(count_table[[category_x]]))
   names(plot_xpos) <- category_x
   plot_xpos <- plot_xpos[order(plot_xpos[[category_x]]), ,
@@ -172,11 +186,11 @@ qc_aligned_barplot_facet <- function (meta,
     plot_fills$fill <- sample(H5weaver::varibow(nrow(plot_fills)),
                               nrow(plot_fills))
   }
-  plot_fills <- plot_fills[order(plot_fills[[category_y]]),
-  ]
+  plot_fills <- plot_fills[order(plot_fills[[category_y]]), ]
+
   count_table <- count_table[plot_fills, on = category_y]
 
-  group_maxes <- count_table[, .(group_max = max(n_cells)),
+  group_maxes <- count_table[, .(group_max = max(counts)),
                              by = list(get(category_y))]
   names(group_maxes)[1] <- category_y
   group_maxes <- group_maxes[order(get(category_y), decreasing = TRUE)]
@@ -192,7 +206,7 @@ qc_aligned_barplot_facet <- function (meta,
                                       group_max/2)]
   count_table <- count_table[group_maxes, on = category_y]
   count_table <- count_table[order(get(category_y), decreasing = TRUE)]
-  count_table <- count_table[, `:=`(ymax, cumsum(n_cells)),
+  count_table <- count_table[, `:=`(ymax, cumsum(counts)),
                              by = list(get(category_x))]
   count_table <- count_table[, `:=`(ymin, shift(ymax, fill = 0,
                                                 type = "lag")), by = list(get(category_x))]
@@ -200,7 +214,7 @@ qc_aligned_barplot_facet <- function (meta,
     ggplot2::geom_rect(data = count_table, ggplot2::aes(xmin = xpos - 0.4,
                                                         xmax = xpos + 0.4,
                                                         ymin = padded_base,
-                                                        ymax = padded_base + n_cells,
+                                                        ymax = padded_base + counts,
                                                         fill = fill)) +
     ggplot2::geom_hline(data = count_table, ggplot2::aes(yintercept = padded_base)) +
     ggplot2::geom_hline(data = count_table, ggplot2::aes(yintercept = padded_top), linetype = "dashed") +
@@ -218,6 +232,7 @@ qc_aligned_barplot_facet <- function (meta,
     p <- p +
       facet_wrap(facet_formula, ...)
   }
+
   p
 }
 
