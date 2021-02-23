@@ -8,16 +8,17 @@ output:
     self_contained: true
   tables: yes
 params:
-  batch: NULL
+  batch: "X002"
   in_dir: NULL
   in_key: NULL
   in_param: NULL
   out_dir: NULL
   n_cores: NULL
+  mc_mb_limit: 5000
 ---
 
 <details>  
-  <summary>Preprocessing Code</summary> 
+  <summary>Expand Code</summary> 
   
 ```{r setup, include = TRUE}
 # Load Libraries
@@ -67,18 +68,16 @@ stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n
 ```{r variable_definitions}
 fct_mito_umi_threshold <- 0.10
 sample_column_name <- "pbmc_sample_id"
+genes_plot <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A",
+            "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX",
+           "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
+           "FUT4", "ITGAM","FCGR2B","FCER1A")
+cell_label_column_name <- "seurat_pbmc_type"
+cell_label_score_column_name <- "seurat_pbmc_type_score"
+cell_label_method <- "Seurat3"
 
-par_mb_limit <- 50000
-options('future.globals.maxSize' = par_mb_limit*1024^2)
-
-if(is.null(params$n_cores)) {
-  avail_workers <- as.numeric(future::availableCores()-2)
-  if (avail_workers < 2){
-    avail_workers <- 1
-  }
-} else {
-  avail_workers <- params$n_cores 
-}
+s.genes <- Seurat::cc.genes.updated.2019$s.genes
+g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
 ```
 
 
@@ -86,12 +85,7 @@ if(is.null(params$n_cores)) {
 if(is.null(params$in_dir)) {
   batch <- "X002"
   in_dir <- system.file("extdata/X002", package = "batchreporter")
-  # in_dir <- "~/Packages/scrna-batch-report/inst/extdata"
-  # in_dir <- "/home/jupyter/scrna-batch-report/inst/extdata"
-  
   in_key <- system.file("extdata/example_sample_key_X002.csv", package = "batchreporter")
-  # in_key <- "~/Packages/scrna-batch-report/inst/extdata/example_sample_key_X002.csv"
-  # in_key <- "/home/jupyter/scrna-batch-report/inst/extdata/example_sample_key.csv"
   out_dir <- tempdir()
 } else {
   batch <-  params$batch
@@ -100,21 +94,41 @@ if(is.null(params$in_dir)) {
   out_dir <- params$out_dir
 }
 
+# Memory limit for mc processing. Default futures is 500
+if(is.null(params$mc_mb_limit)){
+  par_mb_limit <- 500  # Default futures setting, too low for most batches
+} else {
+  par_mb_limit <- params$mc_mb_limit
+}
+options('future.globals.maxSize' = par_mb_limit*1024^2)
+
+# N cores for mc processing
+if(is.null(params$n_cores)) {
+  avail_workers <- as.numeric(future::availableCores()-2)
+  if (avail_workers < 2){
+    avail_workers <- 1
+  }
+} else {
+  avail_workers <- params$n_cores 
+}
+
 rna_in_dir <- in_dir
 
 stm(paste0("IN Batch        : ", batch))
 stm(paste0("IN Directory    : ", in_dir))
 stm(paste0("IN Sample Key   : ", in_key))
+stm(paste0("Multiple Cores  : ", avail_workers))
+stm(paste0("Mb Memory for MC: ", par_mb_limit))
 stm(paste0("OUT Dir         : ", out_dir))
 ```  
 
-<!-- Parse Input ----------------------------------------------------------- -->
-```{r find_files}
+
+```{r find_rna_files}
 # Get list of all target files
-all_labeled_h5 <- list.files(path = file.path(in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
-all_hto_json <- list.files(path = file.path(in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
-all_multiplet_h5 <- list.files(path = file.path(in_dir,"multiplet_h5"), pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
-all_control_h5 <- list.files(path = file.path(in_dir,"control"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+all_hto_json <- list.files(path = file.path(rna_in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
+all_multiplet_h5 <- list.files(path = file.path(rna_in_dir,"multiplet_h5"), pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
+all_control_h5 <- list.files(path = file.path(rna_in_dir,"control"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
 
 stm(paste0("IN Labeled H5 Files  :\n\t", paste(all_labeled_h5, collapse = "\n\t")))
 stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
@@ -126,22 +140,70 @@ stm(paste0("IN Control Labeled H5 Files:\n\t", paste(all_control_h5, collapse = 
 ```{r read_key, include = FALSE}
 stm("Reading in sample key")
 df_key <- data.table::fread(in_key)
-has_controls <- any(grepl("Control", df_key$Type))
+has_controls <- any(grepl("Control", df_key$Type))  # used to control evaluation of batch control-related code chunks
 
 assertthat::assert_that(length(unique(df_key$BatchID)) == 1, msg = "More than 1 batch in input sample key file")
 assertthat::assert_that(batch == unique(df_key$BatchID), msg = "Batch in input key file does not match input batch value")
 
 ```
 
-```{r scrna_seq_child, child = system.file("rmarkdown/scrna_metadata_module.Rmd", package = "batchreporter")}
+```{r merge_meta}
+# Merge Metadata
+stm("Reading in labeled h5 file meta data")
+
+# Merge the count matrices for all samples into 1 table
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
+
+meta_list <- future_lapply(all_labeled_h5, read_h5_cell_meta)
+
+# Create metadata table that contains only singlet cells
+meta <- do.call(rbind, meta_list)
+setDT(meta)
+
+remove("meta_list")
+```
+
+```{r read_multiplet}  
+# Create meta data table that includes missing hashes and multiplet data
+stm("Reading in multiplet h5 file meta data")
+multiplet_meta_list <- future_lapply(all_multiplet_h5, read_h5_cell_meta)
+multiplet_meta <- do.call(rbind, multiplet_meta_list)
+setDT(multiplet_meta)
+
+# Create metadata table that contains both singlet and multiplet cells
+all_meta <- merge(meta, multiplet_meta, all = TRUE) 
+remove("multiplet_meta_list","multiplet_meta")
+```  
+  
+```{r add_vars_meta }
+stm("Adding analysis variables to meta data tables")
+
+meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
+meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
+                                         paste0(">",fct_mito_umi_threshold),
+                                         paste0("<=",fct_mito_umi_threshold)))]
+meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, sample_pool)]
+
+
+all_meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
+all_meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
+                                             paste0(">",fct_mito_umi_threshold),
+                                             paste0("<=",fct_mito_umi_threshold)))]
+all_meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+all_meta[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, sample_pool)]
+all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
 
 ```
 
 ```{r read_control, eval = has_controls}
+# This chunk only evaluated if controls present in samplesheet
 stm("Reading in previous control labeled h5 file meta data")
 
-new_control_h5 <- grep(paste(controls, collapse = "|"), all_labeled_h5, value = TRUE)
-all_control_h5 <- c(all_control_h5, new_control_h5)
+if(has_controls){
+  new_control_h5 <- grep(paste(controls, collapse = "|"), all_labeled_h5, value = TRUE)
+  all_control_h5 <- c(all_control_h5, new_control_h5)
+}
 
 control_meta_list <- future_lapply(all_control_h5, read_h5_cell_meta)
 all_control <- do.call(rbind, control_meta_list)
@@ -262,7 +324,6 @@ merged_so <- Seurat::CreateSeuratObject(counts = all_counts_mat)
 
 # Normalize data
 stm("Normalizing data")
-future::plan("sequential")  # reverting to sequential to avoid error (can use if figure out workaround)
 merged_so <- Seurat::NormalizeData(object = merged_so,
                                    normalization.method = "LogNormalize",
                                    scale.factor = 10000,
@@ -274,46 +335,25 @@ normCounts <- merged_so[["RNA"]]@data
 
 ```{r PCA}
 pc_dims <- min(ncol(merged_so) - 1, 50)
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
 stm("Finding Variable Features")
-suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 merged_so <- FindVariableFeatures(object = merged_so)
 
 stm("Scaling Data")
-# future::plan("sequential")  # reverting to sequential to avoid error
 merged_so <- ScaleData(object = merged_so, verbose = FALSE)
 
 stm("Running PCA")
 merged_so <- RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)
 
-# save pca object
-# saveRDS(merged_so, file = "merged_so_pcaresults.rds")
-# merged_so <- readRDS("merged_so_pcaresults.rds")
-
 ```
 
 ```{r jackstraw_pc_selection, message = FALSE}
-stm("Determining dimensionality via jackstraw method")
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
-sample_cells <- function(cl,
-                          sample.size,
-                          seed = 3030) {
-  cl.cells <- split(names(cl), cl)
-  sampled.cells <- sapply(names(cl.cells), function(x) {
-    cells <- cl.cells[[x]]
-    if (sample.size >= length(cells)) {
-      return(cells)
-    }
-    to.sample <- pmin(sample.size, length(cells))
 
-    set.seed(seed)
-    sample(cells, to.sample)
-  }, simplify = FALSE)
-  sampled.cells <- unlist(sampled.cells)
-  return(sampled.cells)
-}
+stm("Determining dimensionality via jackstraw method")
 
-labels_order <- meta$seurat_pbmc_type[match(meta$barcodes, colnames(merged_so))]
+labels_order <- meta[,get(cell_label_column_name)][match(meta$barcodes, colnames(merged_so))]
 names(labels_order) <- colnames(merged_so)
 
 jackstraw_cells <- sample_cells(labels_order, 100, seed = 3030)
@@ -347,34 +387,24 @@ pc_embeddings <- merged_so@reductions$pca@cell.embeddings
 ```{r merged_umap}
 # Run UMAP
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
-stm(sprintf("Running UMAP on selected coordinates. Using %s cores", nbrOfWorkers()))
-## As the number of dimensions, use the same PCs as input to the clustering analysis
+stm(sprintf("Running UMAP on selected coordinates"))
 
 merged_so <- Seurat::RunUMAP(merged_so,
                                    dims = c(1:50)[good_pcs],
-                                   # umap.method = "umap-learn",
                                    umap.method = "uwot",
                                    seed.use = 3,
                                    verbose = FALSE)
-# saveRDS(merged_so, file = "merged_so.Rds")
-future::plan("sequential")
+
 ```
 
 ```{r cell_cycle}
 stm("Determining Cell Cycle Scoring")
 
-s.genes <- Seurat::cc.genes.updated.2019$s.genes
-g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
 merged_so <- CellCycleScoring(merged_so, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
 
 df_cc <- merged_so[[]][,c("S.Score", "G2M.Score","Phase")] %>%
     tibble::rownames_to_column("barcodes")
 ```
-
-```{r recover_analysis }
-# merged_so <- readRDS("~/Packages/scrna-batch-report/inst/rmarkdown/merged_so_elbow.Rds")
-```
-
 
 ```{r umap_cleanup}
 # Get UMAP coordinates
@@ -403,7 +433,6 @@ Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% expl
 stm("Plotting Batch UMAP by Data Quality Metrics")
 
 # Gene scaling
-# min_genes <- min(100, meta$n_genes)
 max_genes <- max(8000, meta$n_genes)
 max_umi <- max(60000, meta$n_umis)
 point_size <- 0.2
@@ -453,7 +482,7 @@ g5 <- plot_umap_report(df = umapDF,
 
 # Wells
 stm("Plotting Well UMAP")
-cols_well <- immutils::varibow(n_colors = length(unique(umapDF$well_id)))
+cols_well <- H5weaver::varibow(n_colors = length(unique(umapDF$well_id)))
 
 scale_color_well <- function(...){
     scale_color_manual(values = cols_well, ...)
@@ -471,7 +500,7 @@ g6 <- plot_umap_report(df = umapDF,
 
 # Sample
 stm("Plotting Sample ID UMAP")
-cols_sample <- immutils::varibow(n_colors = length(unique(umapDF[,sample_column_name])))
+cols_sample <- H5weaver::varibow(n_colors = length(unique(umapDF[,sample_column_name])))
 scale_color_sample <- function(...){
     scale_color_manual(values = cols_sample, ...)
 }
@@ -504,6 +533,8 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ### Cell Labeling
 
+#### Labeling Method: `r {cell_label_method}`
+
 <a id="top_cell_labeling"></a>
 
 #### Seurat Labeling Scores
@@ -511,29 +542,31 @@ cowplot::plot_grid(aligned_plots[[1]],
 ```{r cell_labeling, fig.height = 8, fig.width = 20}
 stm("Plotting Seurat labeling score distributions")
 
-cell_type_palette <- batchreporter::seurat_3_cell_palette()
-
+# load cell color palette
+cell_labels <- unique(meta[,get(cell_label_column_name)])
+cell_type_palette <- batchreporter::get_cell_label_palette(cell_label_method = cell_label_method,
+                                                           cell_labels = cell_labels)
+                                                            
 # quality scores by sample
-# meta_sample <- meta[ ,.(median_quality = median(seurat_pbmc_type_score)), by = pbmc_sample_id]
-
-meta_label <- meta[ ,.(median_quality = median(seurat_pbmc_type_score)), by = seurat_pbmc_type]
+meta_label <- meta[ ,.(median_quality = median(get(cell_label_score_column_name))), by = cell_label_column_name]
 meta_label[, median_quality_label := sprintf("median = %.3f", round(median_quality,3))]
 
-ggplot(meta, aes(seurat_pbmc_type_score, fill = seurat_pbmc_type)) +
+ggplot(meta, aes(get(cell_label_score_column_name), fill = get(cell_label_column_name))) +
   geom_histogram(bins = 30) +
   scale_color_discrete() +
   geom_text(data = meta_label, x = -Inf, y = Inf, hjust = -0.1, vjust = 1.5, size = 7, aes(label = median_quality_label))+
   ggtitle("Label Quality Score by Cell Label Type") +
   xlab("Label Score") +
-  facet_wrap( ~ seurat_pbmc_type, ncol= 1) +
-  scale_fill_manual(values = cell_type_palette$cell_color, labels = cell_type_palette$seurat3_pbmc_type) +
+  scale_fill_manual(values = cell_type_palette$cell_color, 
+                    labels = cell_type_palette$cell_labels,
+                    name = cell_label_column_name) +
   theme_bw() +
   theme(title = element_text(size = 24),
         legend.text = element_text(size = 18),
         strip.text = element_text(size = 20, face = "bold"),
         axis.text = element_text(size = 14),
         axis.title = element_text(size = 20))+
-  facet_wrap(~seurat_pbmc_type, scales = "free_y")
+  facet_wrap(~get(cell_label_column_name), scales = "free_y")
 
 ```
 
@@ -550,11 +583,13 @@ point_size <- 0.2
 g_base <- ggplot(umapDF, aes(UMAP_1_merged, UMAP_2_merged))
 
 stm("Plotting cell type UMAP")
+
 g1 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
+  geom_point(alpha = 1, size = point_size, aes(color = get(cell_label_column_name))) +
   ggtitle("Cell Labels")+
   scale_color_manual(values = cell_type_palette$cell_color,
-                     breaks = cell_type_palette$seurat3_pbmc_type) +
+                     breaks = cell_type_palette$cell_labels,
+                     name = "Cell Label") +
   theme_bw() +
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
@@ -565,17 +600,18 @@ g1 <- g_base +
 # Labeling Scores
 stm("Plotting Labeling Score UMAP")
 g2 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) +
+  geom_point(alpha = 1, size = point_size, aes(color = get(cell_label_score_column_name))) +
   ggtitle("Label Scores")+
   scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
-                        breaks = c(0,0.25,0.5,0.75,1)) +
+                        breaks = c(0,0.25,0.5,0.75,1), 
+                        name = "Label Score") +
   theme_bw() +
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
 
 # Cell Cycle Scores
-stm("Plotting Cell Cycle Score UMAP")
+stm("Plotting G1 Cell Cycle Category UMAP")
 g3  <- ggplot(umapDF %>% dplyr::filter(Phase == "G1"), aes(UMAP_1_merged, UMAP_2_merged))  +
   geom_point(alpha = 0.3, size = point_size, color = "blue") +
   ggtitle("G1 Cells")+
@@ -584,7 +620,7 @@ g3  <- ggplot(umapDF %>% dplyr::filter(Phase == "G1"), aes(UMAP_1_merged, UMAP_2
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
 
-stm("Plotting Cell Cycle Score UMAP")
+stm("Plotting S Cell Cycle Category UMAP")
 g4  <- ggplot(umapDF %>% dplyr::filter(Phase == "S"), aes(UMAP_1_merged, UMAP_2_merged))  +
   geom_point(alpha = 0.3, size = point_size, color = "forestgreen") +
   ggtitle("S Cells")+
@@ -592,7 +628,8 @@ g4  <- ggplot(umapDF %>% dplyr::filter(Phase == "S"), aes(UMAP_1_merged, UMAP_2_
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
-stm("Plotting Cell Cycle Score UMAP")
+
+stm("Plotting G2M Cell Cycle Category UMAP")
 g5  <- ggplot(umapDF %>% dplyr::filter(Phase == "G2M"), aes(UMAP_1_merged, UMAP_2_merged))  +
   geom_point(alpha = 0.3, size = point_size, color = "orange") +
   ggtitle("G2M Cells")+
@@ -616,15 +653,28 @@ cowplot::plot_grid(aligned_plots[[1]],
 [Return to Top](#top_cell_labeling)
 
 
-#### UMAP by Fraction Mitochondrial UMI
+#### UMAP by Fraction Mitochondrial UMI  
 
-Removed `r {sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)}` cells (`r {round(sum(umapDF$fct_mito_umi >= fct_mito_umi_threshold)/nrow(umapDF)*100,1)}`%)
+```{r fct_mito_table}
+
+mito_tab <- umapDF %>% 
+  group_by(fct_mito_umi_binary) %>% 
+  summarize(N_cells = n(),
+            .groups = "drop") %>% 
+  mutate(Pct_cells = N_cells/sum(N_cells)*100) %>% 
+  rename(fraction_mt_umi_group = fct_mito_umi_binary)
+     
+gt(mito_tab)             
+
+```  
 
 ```{r cell_labeling_lowmito, fig.height = 20, fig.width = 20}
 stm("Plotting Batch UMAP labeling, by fraction mitochondrial reads")
 g1_mito <- g1 +
   facet_grid(~fct_mito_umi_binary) +
   ggtitle("Cell Labels by Fraction Mitochondrial UMI")+
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
   theme(strip.text = element_text(size = 18))
 
 # Labeling Scores
@@ -647,22 +697,21 @@ cowplot::plot_grid(aligned_plots[[1]],
 #### Cell Types by Fraction Mitochondrial Read Group
 ```{r cell_labeling_mito_celltypes, fig.height = 10, fig.width = 20}
 stm("Plotting Batch UMAP labeling scores, by fraction mitochondrial reads")
-summaryScores <- umapDF %>%
-  group_by()
 
-
-label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
+label_scores_mito <- function(umapDF, cell_label_column_name,
+                              mito_binary = "fct_mito_umi_binary"
+                              ){
   summary_all <- umapDF %>%
-    group_by(seurat_pbmc_type) %>%
+    group_by(!!rlang::parse_expr(cell_label_column_name)) %>%
     summarize(N = n(), .groups = "drop") %>%
     ungroup() %>%
     mutate(pct = N/sum(N)) %>%
     mutate(group = "All")
 
-  label_order <- names(sort(table(summary_all$seurat_pbmc_type), decreasing = TRUE))
+  label_order <- names(sort(table(summary_all[,cell_label_column_name]), decreasing = TRUE))
 
   summary_split <- umapDF %>%
-    group_by(seurat_pbmc_type, !!rlang::parse_expr(mito_binary)) %>%
+    group_by(!!rlang::parse_expr(cell_label_column_name), !!rlang::parse_expr(mito_binary)) %>%
     summarize(N = n(), .groups = "drop") %>%
     ungroup() %>%
     group_by(!!rlang::parse_expr(mito_binary)) %>%
@@ -671,41 +720,44 @@ label_scores_mito <- function(umapDF, mito_binary = "fct_mito_umi_binary"){
     mutate(group = paste0("FractionMT",group))
 
   summary_merge <- rbind(summary_all, summary_split) %>%
-    mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = label_order))
+    mutate(cell_label = factor(get(cell_label_column_name), levels = label_order))
 
-  ggplot(summary_merge, aes(factor(seurat_pbmc_type, levels = label_order), pct, fill = group))+
+  ggplot(summary_merge, aes(factor(cell_label, levels = label_order), pct, fill = group))+
     geom_bar(stat = "identity", position = "dodge") +
-    xlab("Cell Type Label")+
-    ylab("Percent Cell Type within Group")
-    theme(text = element_text(size = 18))
+    xlab("Cell Type Label") +
+    ylab("Percent Cell Type within Group") +
+    theme(text = element_text(size = 24),
+          axis.text.x = element_text(angle = 90))
 }
 
-label_scores_mito(umapDF)
+label_scores_mito(umapDF, cell_label_column_name)
 
 ```
 
 #### Marker Visualization
 
 ```{r marker_umap,fig.height = 35, fig.width = 25,  class = "superbigimage"}
+# this variable moved to head of code/parameters
+# genes_plot <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A",
+#             "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX",
+#            "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
+#            "FUT4", "ITGAM","FCGR2B","FCER1A")
+
+
 stm("Plotting UMAP of marker genes")
-genes <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A",
-            "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX",
-           "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
-           "FUT4", "ITGAM","FCGR2B","FCER1A")
+
 cDF <- normCounts
-# rownames(cDF) <- featDF$name[featDF$id == rownames(cDF)]
 
 # Add normalized gene counts to the analysis dataframe (UMAP + meta)
-markerDF <- t(cDF[genes, ]) %>% as.data.frame()
+markerDF <- t(cDF[genes_plot, ]) %>% as.data.frame()
 umapDF2 <- umapDF[, c("UMAP_1_merged", "UMAP_2_merged","fct_mito_umi")]
-# table(rownames(markerDF) == rownames(umapDF2))
 umapDF2 <- cbind(umapDF2, markerDF) %>%
   tidyr::gather(key = gene, value = value, -UMAP_1_merged, -UMAP_2_merged)
-umapDF2$gene <- factor(umapDF2$gene, levels = genes)
+umapDF2$gene <- factor(umapDF2$gene, levels = genes_plot)
 
 # plot UMAP per marker
 marker_umap_l <- list()
-for(G in genes) {
+for(G in genes_plot) {
   umapDF3 <- umapDF2 %>% dplyr::filter(gene %in% G)
   marker_umap_l[[G]] <- ggplot(data = umapDF3,
                                mapping = aes(x = UMAP_1_merged,
@@ -729,11 +781,11 @@ for(G in genes) {
 
 cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
-```
+```  
 
 [Return to Top](#top_cell_labeling)
 
-### Leukopak Control  
+### Bridging Control  
 
 <a id="top_control"></a> 
 
@@ -747,67 +799,50 @@ by_control <- all_control %>%
             median_umi = median(n_umis),
             median_genes = median(n_genes),
             .groups = "drop")
-# by_control
-
-# dummy_table %>% 
-#   gt() %>% 
-#   gt_fmt_comments()
 
 ```  
 
 ```{r control_label_counts, eval=has_controls}
-lab_order <- sort(table(all_control$seurat_pbmc_type[all_control$control_type=="reference"]), decreasing = TRUE)
-all_control <- all_control %>% 
-  mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = names(lab_order)))
+lab_order <- sort(table(all_control[,get(cell_label_column_name)][all_control$control_type=="reference"]), decreasing = TRUE)
+
+# all_control <- all_control %>% 
+#   mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = names(lab_order)))
+
+all_control[,cell_label_fmt := factor(get(cell_label_column_name), levels = names(lab_order))]
+
 
 ctrl_by_type <- all_control %>% 
-  group_by(control_type, seurat_pbmc_type) %>% 
+  group_by(control_type, cell_label_fmt) %>% 
   summarize(N = n(), .groups = "drop") %>% 
   ungroup() %>% 
   group_by(control_type) %>% 
   mutate(pct = N/sum(N)*100) %>% 
   arrange(-pct) %>% 
-  mutate(seurat_pbmc_type = factor(seurat_pbmc_type, levels = unique(seurat_pbmc_type)))
+  mutate(cell_label_fmt = factor(cell_label_fmt, levels = lab_order))
 
-qc_aligned_barplot(meta=all_control, category_x = "seurat_pbmc_type", name_x = "Cell Label",
-                   category_y = "batch_id", name_y = "N Cells",colorset_y = "rainbow", category_name = "Batch")
+qc_aligned_barplot(meta=all_control, category_x = "cell_label_fmt", name_x = "Cell Label",
+                   category_y = "batch_id", name_y = "N Cells", colorset_y = "rainbow", category_name = "Batch")
 
-# ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)))) +
-#   geom_bar(aes(fill = control_type, group = pool_id), position = "dodge") +
-#   theme(axis.text.x = element_text(angle = 90)) +
-#   facet_wrap(~control_type, nrow = 2) +
-#   ggtitle("Count Cell Types") +
-#   ylab("N All Cells") +
-#   xlab("Cell Label") +
-#   theme_bw() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-#         text = element_text(size = 12))
-# 
-# ggplot(all_control, aes(factor(seurat_pbmc_type, levels = levels(ctrl_by_type$seurat_pbmc_type)), group = pool_id)) +
-#   geom_bar(aes(y = ..count../sum(..count..), fill = control_type), position = "dodge") +
-#   theme(axis.text.x = element_text(angle = 90)) +
-#   facet_wrap(~control_type, nrow = 2) +
-#   ggtitle("Count Cell Types") +
-#   ylab("N All Cells") +
-#   xlab("Cell Label") +
-#   theme_bw() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-#         text = element_text(size = 12))
 ```    
 
 [Return to Top](#top_control)   
 
 ```{r control_pct_counts, fig.width = 10, class.output = "superbigimage", eval=has_controls}
-g <- ggplot(ctrl_by_type, aes(seurat_pbmc_type, y = pct)) +
-  geom_bar(aes(fill = control_type), position = "dodge", stat = "identity")  +
-  ggtitle("Percent Cells by Label") +
-  ylab("Percent All Cells") +
-  xlab("\n\n\n\n\n\nCell Label") +
-  theme_bw()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-        axis.title.x = element_text(margin = margin(20,0,0,0))) 
-ggplotly(g) %>% 
-  layout(hovermode = "compare")%>% layout(legend = list(x = 0.8, y = 0.9))
+
+qc_stacked_barplot(meta=all_control, category_x = "pool_id", name_x = "Pool ID",
+                   category_y = "cell_label_fmt", name_y = "Percent Cells", 
+                   colorset_y = "rainbow", category_name = "Cell Label",as_fraction = TRUE)
+
+# g <- ggplot(ctrl_by_type, aes(cell_label_column_name, y = pct)) +
+#   geom_bar(aes(fill = control_type), position = "dodge", stat = "identity")  +
+#   ggtitle("Percent Cells by Label") +
+#   ylab("Percent All Cells") +
+#   xlab("\n\n\n\n\n\nCell Label") +
+#   theme_bw()+
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+#         axis.title.x = element_text(margin = margin(20,0,0,0))) 
+# ggplotly(g) %>% 
+#   layout(hovermode = "compare")%>% layout(legend = list(x = 0.8, y = 0.9))
 
 
 ```  
@@ -819,21 +854,15 @@ stm("Reading and merging all control count matrices")
 # Merge the count matrices for all samples into 1 table
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
-control_sample_pattern <- paste(unique(df_key$SampleID[df_key$Type == "Control"]), collapse = "|")
-run_ctrl_h5 <- grep(control_sample_pattern, all_labeled_h5, value = TRUE)
-combined_control_h5 <- c(run_ctrl_h5, all_control_h5)
 all_ctrl_list <- future.apply::future_lapply(all_control_h5, H5weaver::read_h5_dgCMatrix, target = "matrix", feature_names = "name")
+# Confirm that features are same between control 
+all_same_features <- do.call(all.equal, lapply(all_ctrl_list, row.names))
+if(!all_same_features){
+  stop("All batch control samples do not have the same features in count matrix")
+}
+
 all_ctrl_mat <- do.call(cbind, all_ctrl_list)
 all_ctrl_cells_bc <- all_control$original_barcodes
-
-
-featDF_ctrl <- read_h5_feature_meta(combined_control_h5[1])
-
-# Confirm that features are same between control 
-all_same_features <- do.call(all.equal,lapply(all_ctrl_list, row.names))
-if(!all_same_features){
-  stop("All batch control samples do not have the same features")
-}
 
 ```   
 
@@ -843,8 +872,8 @@ stm("Creating Seurat object from merged data")
 ctrl_so <- Seurat::CreateSeuratObject(counts = all_ctrl_mat)
 
 # Normalize data
+suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 stm("Normalizing data")
-plan("sequential")  # reverting to sequential to avoid error
 ctrl_so <- Seurat::NormalizeData(object = ctrl_so, 
                                  normalization.method = "LogNormalize",
                                  scale.factor = 10000,
@@ -860,7 +889,6 @@ normCountsctrl <- ctrl_so[["RNA"]]@data
 pc_dims_ctrl <- min(ncol(ctrl_so) - 1, 50)
 
 stm("Finding Variable Features Control")
-
 ctrl_so <- FindVariableFeatures(object = ctrl_so)
 
 stm("Scaling Data Control")
@@ -875,10 +903,11 @@ ctrl_so <- RunPCA(object = ctrl_so, npcs = pc_dims_ctrl, verbose = FALSE)
 ```{r Jackstraw_ctrl, message = FALSE, eval=has_controls}
 stm("Determining dimensionality via jackstraw method control")
 
-labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
+labels_order_ctrl <- all_control[,get(cell_label_column_name)][match(all_control$barcodes, colnames(merged_so))]
+# labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
 names(labels_order_ctrl) <- colnames(ctrl_so)
 
-jackstraw_cells_ctrl <- sample_cells(labels_order_ctrl, 100)
+jackstraw_cells_ctrl <- batcherporter::sample_cells(labels_order_ctrl, 100)
 jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
 
 jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
@@ -954,10 +983,11 @@ g_base <- ggplot(umapDF_ctrl %>% arrange(desc(control_type)), aes(UMAP_1_merged,
 
 stm("Plotting cell type UMAP")
 g1 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type)) +
+  geom_point(alpha = 1, size = point_size, aes(color = get(cell_label_column_name))) +
   ggtitle("Cell Labels")+
   scale_color_manual(values = cell_type_palette$cell_color, 
-                     breaks = cell_type_palette$seurat3_pbmc_type) +
+                     breaks = cell_type_palette$cell_labels,
+                     name = "Cell Label") +
   theme_bw() +
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20), 
@@ -968,10 +998,11 @@ g1 <- g_base +
 # Labeling Scores
 stm("Plotting Labeling Score UMAP")
 g2 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = seurat_pbmc_type_score)) +
+  geom_point(alpha = 1, size = point_size, aes(color =  get(cell_label_score_column_name))) +
   ggtitle("Label Scores")+
   scale_color_gradientn(limits = c(0,1),colours = c("blue", "green3","yellow","red"),
-                        breaks = c(0,0.25,0.5,0.75,1)) +
+                        breaks = c(0,0.25,0.5,0.75,1),
+                        name = "Cell Label Score") +
   theme_bw() +
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
@@ -1002,37 +1033,6 @@ cowplot::plot_grid(aligned_plots[[1]],
 [Return to Top](#top_control)   
 
 
-<!-- Batch Summary QC Executed here, referenced in "echo_qc_summary_chunk" above to allow display in first tab -->
-```{r qc_summary, results = "hide"}
-
-# qcCriteria <- c("Well Sequencing and Alignment", "Cell Hashing", "Cell Labeling", "Control Sample")
-# qcMessage <- c("Warning", "Pass", "Pass", "Pass")
-# 
-# final_qc <- data.table(Category = qcCriteria, 
-#                        Results = qcMessage,
-#                        Description = "                      ")
-# 
-# final_qc %>% 
-#   gt::gt() %>% 
-#   gt::tab_style(
-#     style = list(
-#       cell_fill(color = "red" , alpha = 0.3)
-#       ),
-#     locations = cells_body(
-#       columns = vars(Results),
-#       rows = grepl("Warning",Results))
-#   ) %>% 
-#   gt::tab_style(
-#     style = list(
-#       cell_fill(color = "red" , alpha = 0.5)
-#       ),
-#     locations = cells_body(
-#       columns = vars(Results),
-#       rows = grepl("Fail",Results))
-#   ) 
-
-```  
-
 ### Session Information 
 <a id="top_session_info"></a>  
 
@@ -1046,6 +1046,9 @@ all_hto_json_bn
 
 all_multiplet_bn <- basename(all_multiplet_h5)  
 all_multiplet_bn  
+
+all_control_bn <- basename(all_control_h5)  
+all_control_bn  
 
 ```
 

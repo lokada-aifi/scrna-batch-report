@@ -1,4 +1,3 @@
-.libPaths("/home/jupyter/local.lib")
 library(optparse)
 
 option_list <- list(
@@ -17,6 +16,16 @@ option_list <- list(
               default = NULL,
               help = "Input sample sheet",
               metavar = "character"),
+  make_option(opt_str = c("-n","--n_cores"),
+              type = "integer",
+              default = NULL,
+              help = "Number of cores for multicore processing",
+              metavar = "integer"),
+  make_option(opt_str = c("-m","--mc_mb_limit"),
+              type = "integer",
+              default = NULL,
+              help = "Maximum size in Mb allowed for exporting globals to each worker in multicore processing",
+              metavar = "integer"),
   make_option(opt_str = c("-d","--out_dir"),
               type = "character",
               default = NULL,
@@ -46,11 +55,7 @@ rmd_path <- file.path(args$out_dir,
                       paste0(args$batch_id,
                              "_scrna_batch_summary.Rmd"))
 
-# file.copy(system.file("rmarkdown/scrna_batch_summary.Rmd", package = "XXX"),
-#           rmd_path,
-#           overwrite = TRUE)
-
-file.copy("~/Packages/scrna-batch-report/scrna_batch_summary.Rmd",
+file.copy(system.file("rmarkdown/scrna_batch_summary_parent.Rmd", package = "batchreporter"),
           rmd_path,
           overwrite = TRUE)
 
@@ -59,9 +64,14 @@ rmarkdown::render(
   params = list(batch   = args$batch_id,
                 in_dir  = args$in_dir,
                 in_key  = args$in_key,
+                n_cores = args$ncores,
                 out_dir = args$out_dir),
   output_file = args$out_html,
   quiet = TRUE
 )
 
 file.remove(rmd_path)
+
+# Remove figure files generated
+# fig_path <- file.path(args$out_dir,"figures")
+# file.remove(fig_path, recursive = TRUE)

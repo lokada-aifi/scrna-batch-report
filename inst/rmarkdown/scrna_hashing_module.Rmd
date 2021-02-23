@@ -1,8 +1,9 @@
 <!-- # Child Rmarkdown Document for scRNA hashing QC outputs-->
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
-```{r test, include = FALSE}
-rna_in_dir <- "/Users/lauren.okada/Packages/scrna-batch-report/inst/extdata/X002"
-``` 
+
+<!-- ```{r test, include = FALSE} -->
+<!--     rna_in_dir <- "/Users/lauren.okada/Packages/scrna-batch-report/inst/extdata/FullBatch" -->
+<!-- ```   -->
 
 ```{r scrna_hash_dependency_check, include = FALSE}
 assertthat::assert_that(exists("rna_in_dir"))
@@ -17,13 +18,18 @@ in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_na
   select(-hto_order)
 
 if(!exists("all_hto_json")){
-  all_hto_json <- list.files(path = file.path(in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
+  all_hto_json <- list.files(path = file.path(rna_in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
   stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
 }
 
 if(!exists("all_multiplet_h5")){
   all_multiplet_h5 <- list.files(path = file.path(rna_in_dir,"multiplet_h5"), pattern = "_multiplet.h5$", full.names = TRUE, recursive = TRUE)
   stm(paste0("IN Multiplet H5 Files:\n\t", paste(all_multiplet_h5, collapse = "\n\t")))
+}
+
+if(!exists("all_labeled_h5")){
+  all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+  stm(paste0("IN Labeled H5 Files:\n\t", paste(all_labeled_h5, collapse = "\n\t")))
 }
 
 ```
@@ -67,44 +73,65 @@ if(!exists("multiplet_hash")) {
 ```{r scrna_hash_hto_setup, fig.width = 6, fig.height = 30}
 stm("Formatting hto cutoff data")
 
-all_meta_subset <- all_meta %>% 
-  dplyr::select(barcodes, well_id, pool_id, hto_barcode, hto_category) %>% 
-  dplyr::left_join()
+# all_meta_subset <- all_meta %>% 
+#   dplyr::select(barcodes, well_id, pool_id, hto_barcode, hto_category) %>% 
+#   setDT()
 
-all_hash_fmt <- t(all_hash) %>% 
-  as.data.frame() %>% 
-  tibble::rownames_to_column(var = "barcodes") %>% 
-  gather(key = "hto", value = "count", -barcodes) %>% 
-  left_join(all_meta_subset, by = "barcodes") %>% 
-  left_join(in_hto_key, by = "hto_barcode") %>% 
-  rename(hto_name_final = hto_name) %>% 
-  left_join(well_hto_json_df, by = c("hto"="hto_barcode", "well_id"="well_id", "pool_id" = "pool_id")) %>% 
-  mutate(log_count = log10(count)) %>% 
-  mutate(log_count = ifelse(!is.finite(log_count),NA,log_count)) %>% # make log(0) NA
-  mutate(log_cutoff = ifelse(is.na(log_count), NA,log10(cutoff))) %>% 
-  dplyr::mutate(log_count_bin = cut(log_count, 
-                                  breaks = seq(min(log_count,na.rm=T), max(log_count,na.rm=T), 
-                                                          length.out = 30)))
+# all_hash_fmt <- t(all_hash) %>% 
+#   as.data.frame() %>% 
+#   tibble::rownames_to_column(var = "barcodes") %>% 
+#   gather(key = "hto", value = "count", -barcodes) %>% 
+#   left_join(all_meta_subset, by = "barcodes") %>% 
+#   # left_join(in_hto_key, by = "hto_barcode") %>% 
+#   # rename(hto_name_final = hto_name) %>% 
+#   left_join(well_hto_json_df, by = c("hto"="hto_barcode", "well_id"="well_id", "pool_id" = "pool_id")) %>% 
+#   mutate(log_count = log10(count)) %>% 
+#   mutate(log_count = ifelse(!is.finite(log_count),NA,log_count)) %>% # make log(0) NA
+#   mutate(log_cutoff = ifelse(is.na(log_count), NA,log10(cutoff))) %>% 
+#   dplyr::mutate(log_count_bin = cut(log_count, 
+#                                   breaks = seq(min(log_count,na.rm=T), max(log_count,na.rm=T), 
+#                                                           length.out = 30))) %>% 
+#   arrange(barcodes, hto, well_id)
+
+# Create data table w/ 1 row per cell per hto, add hto counts
+all_hash_fmt <- as.data.frame(t(all_hash))
+setDT(all_hash_fmt, keep.rownames = "barcodes")
+all_hash_fmt <- melt(all_hash_fmt, id.vars ="barcodes", variable.name ="hto", 
+                       value.name= "count")
+# Merge in metadata
+all_hash_fmt <- all_hash_fmt[all_meta[,.(barcodes, well_id, pool_id, hto_barcode, hto_category)], on ="barcodes"]
+# Merge in well/hto level hashing info
+all_hash_fmt <- all_hash_fmt[well_hto_json_df, on = c(hto="hto_barcode", well_id="well_id", pool_id = "pool_id")]
+# Add variables for plotting hto distributions
+all_hash_fmt[, log_count := ifelse(count>0, log10(count), NA)] 
+all_hash_fmt[, log_cutoff := ifelse(is.na(log_count), NA, log10(cutoff))] 
+all_hash_fmt[, log_count_bin := cut(log_count, 
+                                      breaks = seq(min(log_count,na.rm=T), 
+                                                   max(log_count,na.rm=T), 
+                                                   length.out = 30))] 
 
 # Format labels as "hash not detected" for any well/hash that has no cells with hash count >5
 low_hto_cutoff <- 5
-well_no_hash <- all_hash_fmt %>% 
-  group_by(well_id, hto) %>%   # For each well/hto combination
-  summarize(n_count = sum(count > low_hto_cutoff),  # number of cells with hto count above min threshold
-            detected = n_count > 0,  # hto  is detected if at least 1 cell has count above threshold
-            .groups = "drop") %>% 
-  mutate(plot_label = ifelse(detected, "", "Hash not detected"))
+all_hash_fmt[, n_count := sum(count > low_hto_cutoff), by = .(well_id, hto)]
+all_hash_fmt[, detected := n_count > 0] 
+all_hash_fmt[, plot_label := ifelse(detected, "", "Hash not detected")] 
 
-all_hash_fmt <- all_hash_fmt %>% 
-  left_join(well_no_hash, by = c("well_id" = "well_id", "hto"="hto")) %>% 
-  mutate(log_count = ifelse(detected, log_count, NA)) %>%  # censor counts for plotting if overall hash not detected
-  mutate(log_cutoff = ifelse(detected, log_cutoff, NA))  # censor cutoffs for plotting if overall hash not detected 
+# well_no_hash <- all_hash_fmt %>% 
+#   group_by(well_id, hto) %>%   # For each well/hto combination
+#   summarize(n_count = sum(count > low_hto_cutoff),  # number of cells with hto count above min threshold
+#             detected = n_count > 0,  # hto  is detected if at least 1 cell has count above threshold
+#             .groups = "drop") %>% 
+#   mutate(plot_label = ifelse(detected, "", "Hash not detected"))
+
+# all_hash_fmt <- all_hash_fmt[well_no_hash, on = c(well_id = "well_id", hto="hto")] 
+all_hash_fmt[, log_count := ifelse(detected, log_count, NA)]   # censor counts for plotting if overall hash not detected
+all_hash_fmt[, log_cutoff := ifelse(detected, log_cutoff, NA)]  # censor cutoffs for plotting if overall hash not detected 
 
 pools <- unique(all_hash_fmt$pool_id)
 ```  
 <a id="top_cell_hashing"></a> 
 
-#### Pool-based Summary  
+#### Hash Tag Recovery
 
 #####  Raw UMI  
 ```{r umi_per_pool}
@@ -119,131 +146,74 @@ pool_info %>%
 
 ```  
 
-#####  Hashing Summary    
-```{r scrna_hash_pool_summary}
-stm("Output pool based summary table")
-pool_summary <- all_meta %>% 
-  group_by(pool_id,hto_category) %>% 
-  summarize(n_cells = n(),
-            median_reads = median(n_reads),
-            median_umis = median(n_umis),
-            median_genes = median(n_genes), 
-            .groups = "drop") %>% 
-  arrange(pool_id, hto_category) %>% 
-  group_by(pool_id) %>%
-  mutate(pct_cells = round(n_cells/sum(n_cells)*100,1), .after = n_cells) %>% 
-  ungroup()
+Showing number of cells positively associated with each hash tag for each well. Includes singlets and multiplets.
 
-qc_table(pool_summary)
-
-# pool_summary %>% 
-#   gt()
-```   
-
-
-
-#### Hash Tag Recovery  
-
-Showing number of cells positively associated with each hash tag for each well. Includes singlets and multiplets
-
-```{r hash_tag_detection_setup}
+```{r scrna_hash_expected_hto}
 # Expected HTO per well based on input sample sheet
 all_wells <- trimws(unique(unlist(strsplit(df_key$WellID, split = ";"))))
-all_hto <-in_hto_key$hto_name
+all_hto <- in_hto_key$hto_name
 df_expected_hto <- expand.grid(well_id = all_wells, hto_name = all_hto) %>% 
   left_join(in_hto_key, by = "hto_name")
 df_expected_hto$hto_expected <- mapply(function(x, y){any(grepl(x, df_key$WellID[df_key$HashTag == y]))},
                                    df_expected_hto$well_id, 
                                    df_expected_hto$hto_name)
+```  
+
+
+##### HTO Positive Cells per Well   
+```{r hto_positive_matrix, results="as-is"}
+# N Cells Raw HTO UMI per well, defined as cells above cutoff
+
+df_expected_hto$n_positive_cells <- mapply(function(x, y){
+      well_hto_json_df$n_pos[which(well_hto_json_df$well_id == x & well_hto_json_df$hto_name == y)]
+    },
+    df_expected_hto$well_id, 
+    df_expected_hto$hto_name)
+df_expected_hto$n_positive_cells[df_expected_hto$n_positive_cells <= 5] <- NA  # change to NA to color undetected tiles uniquely
+
 
 # N Cells Pos HTO per well, defined as cells above cutoff
 df_expected_hto$n_positive_cells <- mapply(function(x, y){
-  well_hto_json_df$n_pos[which(well_hto_json_df$well_id == x & well_hto_json_df$hto_name == y)]
-},
-df_expected_hto$well_id, 
-df_expected_hto$hto_name)
-df_expected_hto$n_positive_cells[df_expected_hto$n_positive_cells < 5] <- NA
+      well_hto_json_df$n_pos[which(well_hto_json_df$well_id == x & well_hto_json_df$hto_name == y)]
+    },
+    df_expected_hto$well_id, 
+    df_expected_hto$hto_name)
+df_expected_hto$n_positive_cells[df_expected_hto$n_positive_cells <= 5] <- NA  # change to NA to color undetected tiles uniquely
 
-# N Singlet Cells
-hto_well_summary <- all_hash_fmt %>% 
-  filter(hto_category == "singlet") %>% 
-  filter(hto == hto_barcode) %>% # keep only rows where detected barcode matches final assigned barcode
-  group_by(well_id, hto_barcode) %>% 
-  summarize(n_singlet = n(),
-            .groups = "drop") %>% 
-  arrange(well_id) 
-df_expected_hto <- df_expected_hto %>% 
-  left_join(hto_well_summary, by = c("well_id"="well_id", "hto_barcode"="hto_barcode"))
-df_expected_hto$n_singlet[df_expected_hto$n_positive_cells <= 5] <- NA
-df_expected_hto$n_singlet[df_expected_hto$n_singlet < 1] <- NA
-```
+# Flag for cells not detected
+df_expected_hto$hto_detection_status <-  mapply(function(x, y){
+      ifelse(x == TRUE & is.na(y),"Missing",
+             ifelse(x == TRUE & !is.na(y), "Detected",
+             ifelse(x == FALSE & is.na(y), "Not Used", NA)))
+    },
+    df_expected_hto$hto_expected, 
+    df_expected_hto$n_positive_cells)
 
-
-##### HTO Positive Cells per Well
-```{r hto_positive_matrix}
 # Heat Map 
 # temp_scale <- scales::rescale(c(0, 5, 1, max(df_expected_hto$n_positive_cells)))
 hm_pos <- ggplot(df_expected_hto, aes(hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = T)))) +
-  geom_tile(aes(fill = n_positive_cells, color = hto_expected), 
+  geom_tile(aes(fill = n_positive_cells, color = hto_detection_status), 
             width = 0.7, height = 0.7, size = 1) +
   scale_fill_viridis_c(option = "D", na.value = "grey") +
-  scale_color_manual(breaks = c(TRUE, FALSE), values = c("black","grey")) +
+    scale_color_manual(breaks = c("Not Used", "Detected","Missing"), values = c("grey","black","red")) +
+  # scale_color_manual(breaks = c(TRUE, FALSE), values = c("black","grey")) +
   scale_x_discrete(position = "top") +
   xlab("HTO") +
-  ylab("Well")
-hm_pos
-```
+  ylab("Well") +
+  facet_grid(substr(well_id,1,7) ~., drop = T, scales = "free_y")
 
-##### N Singlet Cells per HTO and Well
-```{r hto_singlet_matrix}
-hm_singlet <-  ggplot(df_expected_hto, aes(x = hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = T)))) +
-  geom_tile(aes(fill = n_singlet, color = hto_expected), 
-            width = 0.7, height = 0.7, size = 1) +
-  scale_fill_viridis_c(option = "D", na.value = "grey") +
-  scale_color_manual(breaks = c(TRUE, FALSE), values = c("black","grey")) +
-  scale_x_discrete(position = "top") +
-  xlab("HTO") +
-  ylab("Well")
-hm_singlet
-```
+temp_figheight <- n_wells*0.25 + 1
+temp_figwidth <- length(unique(df_expected_hto$hto_name))*0.25 + 2
+batchreporter::make_subchunk(hm_pos, "hto_positive_matrix_subchunk", quiet_knit = T, 
+                             chunk_opt_list = list(height = temp_figheight, width = temp_figwidth))
 
-#### Well-Based Summary
-```{r scrna_hash_well_summary}
-# cutoffs <- well_hto_json_df %>%
-#   dplyr::group_by(hto_barcode, pbmc_sample_id, sample_hto, pool_id) %>%
-#   dplyr::summarize(n_wells = n(),
-#                    median_cutoff = median(cutoff),
-#                    cv_cutoff = sd(cutoff)/mean(cutoff)*100)
-# cutoffs
+```   
 
-
-
-
-well_summary <- all_meta %>%
-  group_by(pool_id, well_id, hto_category) %>%
-  summarize(n_cells = n(),
-         median_reads = median(n_reads),
-         median_umis = median(n_umis),
-         median_genes = median(n_genes),
-         .groups = "drop") %>%
-  arrange(pool_id, well_id,hto_category)
-
-qc_table(well_summary)
-
-# well_summary %>%
-#   gt()
-```  
-  
-  
 #### HTO Count Distributions and Cutoffs  
 
-
-
-
 ```{r all_hto_counts, results="asis"}
-hash_by_well <- all_hash_fmt %>% 
-  group_by(pool_id,well_id, hto,sample_pool_hto, hto_name_barcode) %>% 
-  summarize(hto_count = sum(count),.groups = "drop") 
+hash_by_well <- all_hash_fmt[,.(hto_count=sum(count)), 
+                             by = .(pool_id,well_id, hto, sample_pool_hto,hto_name_barcode)]
 
 g <- ggplot(hash_by_well, aes(well_id, hto_count)) +
   geom_bar(stat="identity", fill = "blue") +
@@ -297,13 +267,14 @@ for (i in seq_along(pools)){
   
   # cutoff line segment
   df_lines <- df %>%
-    dplyr::select(well_id, sample_hto, hto, cutoff, log_cutoff) %>% 
+    dplyr::select(well_id, sample_hto, hto, cutoff, log_cutoff)  %>% 
+    dplyr::filter(!is.na(log_cutoff))%>% 
      dplyr::distinct() 
   
   # labels for hash not detected
   detected_labels <- df %>% 
-     dplyr::select(well_id, hto, sample_hto, plot_label) %>% 
-     dplyr::distinct()
+    dplyr::select(well_id, hto, sample_hto, plot_label) %>% 
+  dplyr::distinct()
   
   x_max <- max(all_hash_fmt$log_count, na.rm = T)
   x_min <- -0.1
@@ -341,7 +312,7 @@ for (i in seq_along(pools)){
   temp_height <- get_plt_ht_temp(n_well_pool = length(unique(df$well_id)), n_hto = length(unique(df$hto)))
   
   # Output plot with custom chunk format
-  make_subchunk(g_ridge, subchunk_name = paste0("ridge_", i), 
+  batchreporter::make_subchunk(g_ridge, subchunk_name = paste0("ridge_", i), 
                 chunk_opt_list = list(fig.height = temp_height, fig.width = 18, warning = FALSE), 
                 quiet_knit = TRUE)
 }
@@ -407,16 +378,40 @@ make_subchunk(ply_cutoff_pos, subchunk_name = "hto_positive_subchunk",
   
 [Return to Top](#top_cell_hashing)  
     
- 
+#### Pool Hashing Summary    
+```{r scrna_hash_pool_summary}
+stm("Output pool based summary table")
+pool_summary <- all_meta[ ,.(n_cells = .N,
+                             median_reads = median(n_reads),
+                             median_umis = median(n_umis),
+                             median_genes = median(n_genes)), 
+                          by = .(pool_id, hto_category)]
+setorder(pool_summary,pool_id, hto_category)
+pool_summary[, pct_cells := round(n_cells/sum(n_cells)*100,1), by = pool_id]
+setcolorder(pool_summary, c("pool_id", "hto_category", "n_cells", "pct_cells", 
+                            "median_reads", "median_umis", "median_genes"))
+
+qc_table(pool_summary)
+
+```   
+
+#### Well-Based Summary  
+```{r scrna_hash_well_summary}
+well_summary <- all_meta[ ,.(n_cells = .N,
+                             median_reads = median(n_reads),
+                             median_umis = median(n_umis),
+                             median_genes = median(n_genes)), 
+                          by = .(pool_id, well_id, hto_category)]
+setorder(well_summary, pool_id, well_id, hto_category)
+
+qc_table(well_summary)
+
+```  
 #### HTO Category Counts by Well  
 
 ```{r hto_cat_counts, results = "asis"}
 stm("Plotting hto category counts per well")
-# hto_cat <- all_meta %>% 
-#   group_by(well_id, pool_id, hto_category) %>% 
-#   summarise(N = n(), .groups = "drop") %>% 
-#   tidyr::spread(key = hto_category, value = N) 
-  
+
 g <- qc_aligned_barplot_facet(all_meta,
                    category_x = "well_id",
                    name_x = "Well ID",
@@ -428,7 +423,7 @@ g <- qc_aligned_barplot_facet(all_meta,
                    facet_formula = formula("~pool_id"), nrow = 1, scales = "free_x") +
   ggtitle("HTO Category Counts per Well")
 
-temp_figwidth <- (4*((n_pools>1)+1) + 3)
+temp_figwidth <- 4*((n_pools>1)+1) + 3
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
 make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
@@ -480,17 +475,17 @@ for (i in seq_along(pools)){
                    category_name = "HTO Barcode",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
-                   padding = 0.2) +#,
-                   # facet_formula = formula("~pool_id"), nrow = 1, scales = "free_y", drop = TRUE) +
+                   padding = 0.2,
+                   facet_formula = formula("~pool_id"), nrow = 1, scales = "free_y", drop = TRUE) +
   ggtitle(pools[i])
 
 }
 
 g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 
-temp_figwidth <- (1.2*n_wells + 0.5*n_pools + 3)
+temp_figwidth <- 1.2*n_wells + 0.5*n_pools + 3.5
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
-make_subchunk(g, subchunk_name = "hto_cat_count_subchunk", 
+batchreporter::make_subchunk(g, subchunk_name = "hto_cat_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
@@ -519,9 +514,9 @@ for (i in seq_along(pools)){
 }
 
 g <- cowplot::plot_grid(plotlist = plot_list, nrow = 1)
-temp_figwidth <- (1.2*n_wells + 0.5*n_pools + 3)
+temp_figwidth <- 1.2*n_wells + 0.5*n_pools + 3.5
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
-make_subchunk(g, subchunk_name = "hto_fraction_subchunk", 
+batchreporter::make_subchunk(g, subchunk_name = "hto_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
   
@@ -550,7 +545,7 @@ for (i in seq_along(pools)){
 g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 temp_figwidth <- (1.2*n_wells + 0.5*n_pools + 3)
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
-make_subchunk(g, subchunk_name = "well_count_subchunk", 
+batchreporter::make_subchunk(g, subchunk_name = "well_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
@@ -579,7 +574,7 @@ for (i in seq_along(pools)){
 g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 temp_figwidth <- (1.2*n_wells + 0.5*n_pools + 3)
 temp_figheight <- ceiling(n_pools/2)*6 + 0.4
-make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
+batchreporter::make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 

@@ -488,7 +488,7 @@ scale_color_fct_mito <- function(colors = c("blue", "green3","yellow","red"),
 #' @return A data frame with columns "seurat3_pbmc_type" and "cell_color"
 #' @export
 seurat_3_cell_palette <- function(){
-  data.frame(seurat3_pbmc_type = c("B cell progenitor", "CD14+ Monocytes", "CD16+ Monocytes",
+  data.frame(cell_labels = c("B cell progenitor", "CD14+ Monocytes", "CD16+ Monocytes",
                                    "CD4 Memory", "CD4 Naive","CD8 effector", "CD8 Naive",
                                    "Dendritic cell", "Double negative T cell", "NK cell",
                                    "pDC", "Platelets", "pre-B cell"),
@@ -496,4 +496,34 @@ seurat_3_cell_palette <- function(){
                             "#E546FA","#F598E5","#008A12", "#803CCF", "#967729", "#B1C4F0",
                             "#DCF0B1"),
              stringsAsFactors = FALSE)
+}
+
+#' Load Cell Label Color Palette
+#'
+#' For recognized labeling methods loads a cell-type specific color palette,
+#' otherwise genreates a varibow palette based on number of cell types in data
+#' @param cell_label_method Character value. Cell labeling method. Currently only
+#' defined method is Seurat3.
+#' @param cell_labels Character vector. All cell type labels in the dataset.
+#' @return
+#' @export
+#' @examples
+#' get_cell_label_palette(cell_label_method = "Seurat3")
+#' \dontrun{get_cell_label_palette(cell_label_method = "SpecialLabelMethod") ## generates intentional error}
+#' get_cell_label_palette(cell_label_method = "SpecialLabelMethod",
+#'                        cell_labels = c("Label1","Label2","Label3"))
+get_cell_label_palette <- function(cell_label_method = "Seurat3", cell_labels=NULL){
+  if(cell_label_method == "Seurat3"){
+    seurat_3_cell_palette()
+  } else {
+    assertthat::assert_that(!is.null(cell_labels),
+                            msg = "Unrecognized cell label method. Must supply cell_labels to generate a custom palette")
+    unique_labels = unique(sort(cell_labels,na.last = TRUE))
+    n_labels <- length(unique_labels)
+    pal_colors <- H5weaver::varibow(n_labels)
+    df_pal <-   data.frame(cell_labels = unique_labels,
+                           cell_color = pal_colors,
+                           stringsAsFactors = FALSE)
+    df_pal
+  }
 }

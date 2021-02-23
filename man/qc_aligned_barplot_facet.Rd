@@ -10,9 +10,11 @@ qc_aligned_barplot_facet(
   name_x = "Batch ID",
   category_y = "well_id",
   category_name = "Well ID",
-  colorset_y = "varibow",
   name_y = "N Cells",
   padding = 0.2,
+  colorset_y = "varibow",
+  stat = "count",
+  variable_y_identity = NULL,
   facet_formula = NULL,
   ...
 )
@@ -28,11 +30,11 @@ qc_aligned_barplot_facet(
 
 \item{category_name}{A character object specifying a name to display for the colors}
 
-\item{colorset_y}{A colorset to use as fills for category_y. Currently supported: "rainbow" or "varibow". Default is "varibow"}
-
 \item{name_y}{A character object specifying a name for the y-axis.}
 
 \item{padding}{A numeric object specifying the the fraction of the total vertical space to use for separating category_y groups. Default is 0.2.}
+
+\item{colorset_y}{A colorset to use as fills for category_y. Currently supported: "rainbow" or "varibow". Default is "varibow"}
 
 \item{facet_formula}{A formula object for faceting based on variables in the meta data frame. For example, \code{formula("~pool_id")} will facet wrap by a variable called pool_id in meta.}
 

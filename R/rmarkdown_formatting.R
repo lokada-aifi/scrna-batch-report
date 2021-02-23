@@ -360,3 +360,7 @@ determine_passing_spec <- function(values, lower_threshold = NULL, upper_thresho
 
 }
 
+markdown_colorize_html <- function(x, color) {
+    sprintf("<span style='color: %s;'>%s</span>", color, x)
+}
+
