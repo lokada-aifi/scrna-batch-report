@@ -6,17 +6,21 @@ output:
     code_folding: hide
     df_print: paged
     self_contained: true
+    toc: true
+    toc_float: true
   tables: yes
 params:
   batch: "X002"
   in_dir: NULL
   in_key: NULL
-  in_param: NULL
+  in_batch_meta: NULL
+  in_config: NULL 
   out_dir: NULL
   n_cores: NULL
   mc_mb_limit: 5000
 ---
 
+<!-- create details section to collapse multiple no-output code blocks to save space -->
 <details>  
   <summary>Expand Code</summary> 
   
@@ -65,32 +69,22 @@ stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n
     
 ```  
 
-```{r variable_definitions}
-fct_mito_umi_threshold <- 0.10
-sample_column_name <- "pbmc_sample_id"
-genes_plot <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A",
-            "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX",
-           "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
-           "FUT4", "ITGAM","FCGR2B","FCER1A")
-cell_label_column_name <- "seurat_pbmc_type"
-cell_label_score_column_name <- "seurat_pbmc_type_score"
-cell_label_method <- "Seurat3"
-
-s.genes <- Seurat::cc.genes.updated.2019$s.genes
-g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
-```
-
 
 ```{r parse_arguments}
+# give input directory rna-specific name 
 if(is.null(params$in_dir)) {
   batch <- "X002"
-  in_dir <- system.file("extdata/X002", package = "batchreporter")
+  rna_in_dir <- system.file("extdata/X002", package = "batchreporter")
   in_key <- system.file("extdata/example_sample_key_X002.csv", package = "batchreporter")
+  in_config <- system.file("extdata/default_rna_config_v1.csv", package = "batchreporter")
+  # in_config <- "~/Packages/scrna-batch-report/inst/extdata/"
+
   out_dir <- tempdir()
 } else {
   batch <-  params$batch
-  in_dir <- params$in_dir
+  rna_in_dir <- params$in_dir
   in_key <- params$in_key
+  in_config <- params$in_config
   out_dir <- params$out_dir
 }
 
@@ -112,10 +106,8 @@ if(is.null(params$n_cores)) {
   avail_workers <- params$n_cores 
 }
 
-rna_in_dir <- in_dir
-
 stm(paste0("IN Batch        : ", batch))
-stm(paste0("IN Directory    : ", in_dir))
+stm(paste0("IN Directory    : ", rna_in_dir))
 stm(paste0("IN Sample Key   : ", in_key))
 stm(paste0("Multiple Cores  : ", avail_workers))
 stm(paste0("Mb Memory for MC: ", par_mb_limit))
@@ -123,12 +115,63 @@ stm(paste0("OUT Dir         : ", out_dir))
 ```  
 
 
+```{r variable_definitions}
+cnfg <- load_config(in_config = in_config)
+expected_parameters <- c("fct_mito_umi_threshold",
+                         "sample_column_name",
+                         "hash_key",
+                         "cell_label_column_name",
+                         "cell_label_score_column_name",
+                         "cell_label_method",
+                         "genes_plot",
+                         "s.genes",
+                         "g2m.genes")
+validate_config(cnfg, expected_parameters)
+
+fct_mito_umi_threshold <- cnfg$fct_mito_umi_threshold
+sample_column_name <- cnfg$sample_column_name
+cell_label_column_name <- cnfg$cell_label_column_name
+cell_label_score_column_name <- cnfg$cell_label_score_column_name
+cell_label_method <- cnfg$cell_label_method
+cell_label_reference <- cnfg$cell_label_reference
+hash_key <- cnfg$hash_key
+genes_plot <- cnfg$genes_plot
+s.genes <- cnfg$s.genes
+g2m.genes <- cnfg$g2m.genes
+
+# fct_mito_umi_threshold <- 0.10
+# sample_column_name <- "pbmc_sample_id"
+# genes_plot <- c("CD3D","CD3E", "CD3G","CD247","CD4", "CD8A",
+#                 "HLA-DRA", "CD14", "FCGR3A", "IL3RA", "ITGAX",
+#                 "CD19", "MS4A1", "CD79A", "NCAM1", "NKG7", "PPBP", "IL7R",
+#                 "FUT4", "ITGAM","FCGR2B","FCER1A")
+# cell_label_column_name <- "seurat_pbmc_type"
+# cell_label_score_column_name <- "seurat_pbmc_type_score"
+# cell_label_method <- "Seurat3-PBMC"
+# 
+# s.genes <- Seurat::cc.genes.updated.2019$s.genes
+# g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
+
+```  
+
 ```{r find_rna_files}
 # Get list of all target files
-all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
-all_hto_json <- list.files(path = file.path(rna_in_dir,"hash"), pattern = "hto_processing_metrics.json$", full.names = TRUE, recursive = TRUE)
-all_multiplet_h5 <- list.files(path = file.path(rna_in_dir,"multiplet_h5"), pattern = "multiplet.h5$", full.names = TRUE, recursive = TRUE)
-all_control_h5 <- list.files(path = file.path(rna_in_dir,"control"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
+all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), 
+                             pattern = "_labeled.h5$", 
+                             full.names = TRUE, 
+                             recursive = TRUE)
+all_hto_json <- list.files(path = file.path(rna_in_dir,"hash"), 
+                           pattern = "hto_processing_metrics.json$", 
+                           full.names = TRUE, 
+                           recursive = TRUE)
+all_multiplet_h5 <- list.files(path = file.path(rna_in_dir,"multiplet_h5"), 
+                               pattern = "multiplet.h5$", 
+                               full.names = TRUE, 
+                               recursive = TRUE)
+all_control_h5 <- list.files(path = file.path(rna_in_dir,"control"), 
+                             pattern = "_labeled.h5$", 
+                             full.names = TRUE, 
+                             recursive = TRUE)
 
 stm(paste0("IN Labeled H5 Files  :\n\t", paste(all_labeled_h5, collapse = "\n\t")))
 stm(paste0("IN JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
@@ -178,14 +221,17 @@ remove("multiplet_meta_list","multiplet_meta")
 ```{r add_vars_meta }
 stm("Adding analysis variables to meta data tables")
 
+# Mito UMI variables and compound labels for plotting
 meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                          paste0(">",fct_mito_umi_threshold),
                                          paste0("<=",fct_mito_umi_threshold)))]
 meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
 meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, sample_pool)]
+meta[ , fct_mito_group:=cut(fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf),
+                           labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))]
 
-
+# Mito UMI variables and compound labels for plotting
 all_meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 all_meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                              paste0(">",fct_mito_umi_threshold),
@@ -215,9 +261,9 @@ all_control[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 all_control[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
 all_control[ , plot_barcode:= sprintf("%s\n%s",hto_barcode, sample_pool)]
 
-```
-
-</details>
+```  
+</details>  
+<!-- end of details section collapsing multiple no-output code blocks to save space -->
 
 ## Batch Information    
 ```{r batchinfo, include = TRUE}
@@ -263,11 +309,13 @@ simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
 ### Well Sequencing and Alignment {.active}  
 
 ```{r scrna_seq_child, child =  system.file("rmarkdown/scrna_seq_module.Rmd", package = "batchreporter")}
+
 ```
   
 ### Cell Hashing 
 
-```{r scrna_seq_child, child = system.file("rmarkdown/scrna_hashing_module.Rmd", package = "batchreporter")}
+```{r scrna_hashing_child, child = system.file("rmarkdown/scrna_hashing_module.Rmd", package = "batchreporter")} 
+
 ```
 
 
@@ -295,7 +343,6 @@ tempwidth <- n_samples*0.5 + 2
 
 make_subchunk(g_pl, subchunk_name = "fraction_mito_subchunk", quiet_knit = T,
               chunk_opt_list = list(fig.width = tempwidth, fig.height = 6))
-
 
 ```
 
@@ -533,7 +580,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ### Cell Labeling
 
-#### Labeling Method: `r {cell_label_method}`
+#### Labeling Method: `r {sprintf("%s, %s", cell_label_method, cell_label_reference)}`
 
 <a id="top_cell_labeling"></a>
 
@@ -748,6 +795,10 @@ stm("Plotting UMAP of marker genes")
 
 cDF <- normCounts
 
+if(!all(genes_plot %in% rownames(cDF))){
+  
+}
+
 # Add normalized gene counts to the analysis dataframe (UMAP + meta)
 markerDF <- t(cDF[genes_plot, ]) %>% as.data.frame()
 umapDF2 <- umapDF[, c("UMAP_1_merged", "UMAP_2_merged","fct_mito_umi")]
@@ -789,15 +840,17 @@ cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
 <a id="top_control"></a> 
 
+Comparing batch bridging control to previous 
+
 ```{r control_summary, eval=has_controls}
 all_control <- all_control %>% 
   mutate(control_type = ifelse(batch_id == batch, "new", "reference")) 
 by_control <- all_control %>% 
   group_by(control_type) %>% 
-  summarize(n_cells = n(),
-            median_reads = median(n_reads),
-            median_umi = median(n_umis),
-            median_genes = median(n_genes),
+  summarize(n_cells = n(), 
+            median_reads = median(n_reads), 
+            median_umi = median(n_umis), 
+            median_genes = median(n_genes), 
             .groups = "drop")
 
 ```  

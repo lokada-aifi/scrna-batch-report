@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_functions.R
 \name{qc_aligned_barplot_facet}
 \alias{qc_aligned_barplot_facet}
-\title{QC Aligned Barplot with Faceting}
+\title{Generate a baseline-aligned barplot for two categorical metrics with faceting}
 \usage{
 qc_aligned_barplot_facet(
   meta,
@@ -10,9 +10,9 @@ qc_aligned_barplot_facet(
   name_x = "Batch ID",
   category_y = "well_id",
   category_name = "Well ID",
+  colorset_y = "varibow",
   name_y = "N Cells",
   padding = 0.2,
-  colorset_y = "varibow",
   stat = "count",
   variable_y_identity = NULL,
   facet_formula = NULL,
@@ -22,28 +22,91 @@ qc_aligned_barplot_facet(
 \arguments{
 \item{meta}{A data.frame containing metadata}
 
-\item{category_x}{A character object specifying the metadata to use for splitting in the y-direction}
+\item{category_x}{A character object specifying the metadata to use for grouping on the x-axis}
 
 \item{name_x}{A character object specifying a name to display on the x-axis}
 
-\item{category_y}{A character object specifying the metadata to use for color groups}
+\item{category_y}{A character object specifying the metadata to use for splitting in the y-direction}
 
 \item{category_name}{A character object specifying a name to display for the colors}
 
+\item{colorset_y}{A colorset to use as fills for category_y. Currently supported: "rainbow" or "varibow". Default is "varibow"}
+
 \item{name_y}{A character object specifying a name for the y-axis.}
 
-\item{padding}{A numeric object specifying the the fraction of the total vertical space to use for separating category_y groups. Default is 0.2.}
+\item{padding}{A numeric object specifying the fraction of the total vertical space to use for separating category_y groups. Default is 0.2.}
 
-\item{colorset_y}{A colorset to use as fills for category_y. Currently supported: "rainbow" or "varibow". Default is "varibow"}
+\item{stat}{A character object specifying the stat method for the barplot. Default is "count", also supports "identity".}
+
+\item{variable_y_identity}{A character object specifying a the values to plot on y axis when stat="identity"}
 
 \item{facet_formula}{A formula object for faceting based on variables in the meta data frame. For example, \code{formula("~pool_id")} will facet wrap by a variable called pool_id in meta.}
 
-\item{...}{Additional arguments passed to \code{ggplot2::face_wrap()}}
+\item{...}{Additional arguments passed to \code{ggplot2::facet_wrap()}}
 }
 \value{
-A ggplot2 plot object
+a ggplot2 plot object
 }
 \description{
-The metric used for category_x will generate bars as columns on the x-axis. The bar will be split vertically based on category_y. Each group in category_y will be aligned to make them easier to compare.
-Facet wrapping will be performed on supplied variables based on the facet_formula.
+The metric used for category_x will generate bars as columns on the x-axis.
+The bar will be split vertically based on category_y. Each group in category_y
+will be aligned to make them easier to compare. Facet wrapping will be
+performed on supplied variables based on the facet_formula. By specifying "stat"
+the function can accept either metadata that has been pre-aggregated or raw values
+to be counted.
+}
+\examples{
+set.seed(3)
+test_data_1 <- data.frame(batch_id=sample(c("B001","B002"),1000, replace = T),
+                        well_id = sample(c("W1","W2","W3"),1000, replace = T),
+                        sample_names= 1:1000)
+qc_aligned_barplot_facet(test_data_1,
+                         category_x = "batch_id",
+                         name_x = "Batch ID",
+                         category_y = "well_id",
+                         category_name = "Well ID",
+                         colorset_y = "varibow",
+                         name_y = "N Cells",
+                         padding = 0.2)
+
+test_data <- rbind(data.frame(row=1:1000,
+                              pool_id="P1",
+                              well_id = sample(c("W1","W2","W3"),1000, replace = T),
+                              sample_id= sample(1:3, 1000, replace = T)),
+                   data.frame(row=1001:2000,
+                              pool_id="P2",
+                              well_id = sample(c("W4","W5","W6"),1000, replace = T),
+                              sample_id= sample(4:6, 1000, replace = T)))
+qc_aligned_barplot_facet(test_data,
+                         category_x = "well_id",
+                         name_x = "Well ID",
+                         category_y = "sample_id",
+                         category_name = "Sample ID",
+                         colorset_y = "varibow",
+                         name_y = "N Cells",
+                         padding = 0.2,
+                         facet_formula = formula("~pool_id"),
+                         scales = "free")
+
+test_data_3 <- rbind(expand_grid(pool_id = "P1",
+                               sample_id = c("S1","S2","S3"),
+                               well_id = c("W1","W2","W3")),
+                   expand_grid(pool_id = "P2",
+                               sample_id = c("S4","S5","S6"),
+                               well_id = c("W4","W5","W6"))
+                 )
+test_data_3$n_cells <- round(rnorm(nrow(test_data_2), 1000, 100))
+qc_aligned_barplot_facet(test_data_3,
+    category_x = "well_id",
+    name_x = "Well ID",
+    category_y = "sample_id",
+    category_name = "Sample ID",
+    colorset_y = "varibow",
+    name_y = "N Cells",
+    padding = 0.2,
+    stat= "identity",
+    variable_y_identity = "n_cells",
+    facet_formula = formula("~pool_id"),
+    scales = "free")
+
 }

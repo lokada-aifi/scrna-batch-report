@@ -2,11 +2,41 @@
 <!-- Reads in metadata from labeled h5 file, adds back in metadata from multiplets -->
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
 
+```{r scrna_label_dependency_check, include = FALSE}
+assertthat::assert_that(exists("rna_in_dir"))
+assertthat::assert_that(length(dir(file.path(rna_in_dir,"multiplet_h5")))>0)
+sample_column_name
+assertthat::assert_that(exists("fct_mito_umi_threshold"))
+assertthat::assert_that(exists("sample_column_name"))
+
+
+# check that we have h5 files provided. Can accept any type post merge. Prioritize labeled
+h5_file_dir_options <- file.path(rna_in_dir, c("labeled_h5","merged_h5"))
+assertthat::assert_that(any(dir.exists(h5_file_dir_options)))
+
+# which set of h5 of file will be used. current priority is labeled then merged
+h5_file_dir <- h5_file_dir_options[dir.exists(h5_file_dir_options)][1]
+assertthat::assert_that(length(dir(h5_file_dir)) > 0)
+
+h5_file_type <- ifelse(h5_file_dir == h5_file_dir_options[1],"labeled" ,
+                              ifelse( h5_file_dir == h5_file_dir_options[2],"merged", 
+                                      stop("scrna seq module requires an h5 input folder in input directory")))
+```  
+
 ```{r rna_metadata_files}
-if(!exists("all_labeled_h5")){
-  all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
-  stm(paste0("IN Labeled H5 Files  :\n\t", paste(all_labeled_h5, collapse = "\n\t")))
+# Identify the individual files to use for metadata and load if not in memory
+expected_files <- switch(h5_file_type,
+                         merged = "all_merged_h5",
+                         labeled = "all_labeled_h5")
+
+if(exists(expected_files)){
+  all_h5 <- get(expected_files)
+} else {
+  all_h5 <- list.files(path = h5_file_dir, 
+                               pattern = ".h5$", 
+                               full.names = TRUE, recursive = TRUE)
 }
+stm(paste0("IN H5 Files for metadata  :\n\t", paste(all_h5, collapse = "\n\t")))
 
 if(!exists("all_multiplet_h5")){
   all_multiplet_h5 <- list.files(path = file.path(rna_in_dir,"multiplet_h5"), pattern = "_multiplet.h5$", full.names = TRUE, recursive = TRUE)
@@ -17,13 +47,13 @@ if(!exists("all_multiplet_h5")){
 
 ```{r merge_meta}
 # Merge Metadata
-stm("Reading in labeled h5 file meta data")
+stm("Reading in h5 file meta data")
 
 # Merge the count matrices for all samples into 1 table
 avail_workers <- as.numeric(future::availableCores())
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
-meta_list <- future_lapply(all_labeled_h5, read_h5_cell_meta)
+meta_list <- future_lapply(all_h5, read_h5_cell_meta)
 meta <- do.call(rbind, meta_list)
 setDT(meta)
 
@@ -41,6 +71,8 @@ remove("multiplet_meta_list","multiplet_meta")
 ```  
   
 ```{r add_vars_meta }
+stm("Adding analysis variables to metadata")
+
 meta[, ":="(fct_mito_umi = n_mito_umis/n_umis)]
 meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                          paste0(">",fct_mito_umi_threshold),

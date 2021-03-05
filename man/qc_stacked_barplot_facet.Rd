@@ -36,7 +36,7 @@ qc_stacked_barplot_facet(
 
 \item{facet_formula}{A formula object for faceting based on variables in the meta data frame. For example, \code{formula("~pool_id")} will facet wrap by a variable called pool_id in meta.}
 
-\item{...}{Additional arguments passed to \code{ggplot2::face_wrap()}}
+\item{...}{Additional arguments passed to \code{ggplot2::facet_wrap()}}
 }
 \value{
 A ggplot2 plot object

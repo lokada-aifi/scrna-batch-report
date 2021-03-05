@@ -1,58 +1,28 @@
-<!-- # Child Rmarkdown Document for 10X genomics cellranger-based sequencing outputs-->
+<!-- # Child Rmarkdown Document for 10X genomics cellranger-based scRNA sequencing outputs -->
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
+<!-- Note: should this be changed to just sample_h5? to allow for other types of h5 files? ie metadata-injected h5 pre-hashing? -->
+
 The following metrics summarize the sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  
 
 ```{r scrna_seq_dependency_check, include = FALSE}
 assertthat::assert_that(exists("rna_in_dir"))
-assertthat::assert_that(length(dir(file.path(rna_in_dir,"labeled_h5")))>0)
 
-```
+# check that we have h5 files provided. Can accept any type where 10x metadata has been injected
+h5_file_dir_options <- file.path(rna_in_dir, c("injected_h5","merged_h5","labeled_h5"))
+assertthat::assert_that(any(dir.exists(h5_file_dir_options)))
 
-```{r scrna_definitions}
-vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
-              "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
-              "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
-              "q30_bases_in_sample_index", "q30_bases_in_umi", "reads_mapped_antisense_to_gene", 
-              "reads_mapped_confidently_to_exonic_regions", "reads_mapped_confidently_to_genome", 
-              "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
-              "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
-              "sequencing_saturation", "total_genes_detected", "valid_barcodes")
+# which set of h5 of file will be used. current priority is cellranger, then merged, then labeled
+h5_file_dir <- h5_file_dir_options[dir.exists(h5_file_dir_options)][1]
+assertthat::assert_that(length(dir(h5_file_dir)) > 0)
 
-```
+h5_file_type <- ifelse(h5_file_dir == h5_file_dir_options[1], "cellranger",
+                       ifelse(h5_file_dir == h5_file_dir_options[2],"merged" ,
+                              ifelse( h5_file_dir == h5_file_dir_options[3],"labeled", 
+                                      stop("scrna seq module requires an h5 input folder in input directory"))))
 
-```{r seq_input_files}
-if(!exists("all_labeled_h5")){
-  all_labeled_h5 <- list.files(path = file.path(rna_in_dir,"labeled_h5"), pattern = "_labeled.h5$", full.names = TRUE, recursive = TRUE)
-}
-
-if(!exists("well_info")){
-  # Merge Well Data
-  stm("Reading in labeled h5 file well data")
-  
-  well_list <- future_lapply(all_labeled_h5, read_h5_well_meta)
-  well_info <- unique(do.call(rbind, well_list))
-  setDT(well_info)
-  well_info[, pool_id := gsub("C\\d+W\\d+", "", well_id)]
-  
-  remove("well_list")
-}
-
-```
-  
-#### Pool Summary  
-```{r well_summary_table1, results = "asis"}
-pool_info <- well_info %>%
-  dplyr::group_by(pool_id) %>%
-  dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
-            total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
-names(pool_info) <- stringr::str_to_title(gsub("_", " ", names(pool_info)))
-pool_info %>%
-  gt::gt() %>%
-  gt::cols_align(align = "right", columns = 2:3)
 ```  
-  
-#### Detailed Well Summary  
-```{r well_summary_table, results = "asis"}
+
+```{r scrna_definitions} 
 vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
             "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
             "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
@@ -78,47 +48,94 @@ df_vars <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing
                       Variable_name = vlabels,
                       Variable = vnames,
                       Round = digitsRound)
+```
+
+```{r scrna_seq_input_files}
+# locate files unless already in memory from an upstream process. 
+expected_files <- switch(h5_file_type,
+                         cellranger = "all_cellranger_h5",
+                         merged = "all_merged_h5",
+                         labeled = "all_labeled_h5")
+
+if(exists(expected_files)){
+  all_h5 <- get(expected_files)
+} else {
+  all_h5 <- list.files(path = h5_file_dir, 
+                               pattern = ".h5$", 
+                               full.names = TRUE, recursive = TRUE)
+}
+
+if(!exists("well_info")){
+  # Merge Well Data
+  stm("Reading in labeled h5 file well data")
+  
+  well_list <- future_lapply(all_h5, read_h5_well_meta)
+  well_info <- unique(do.call(rbind, well_list))
+  setDT(well_info)
+  well_info[, pool_id := gsub("C\\d+W\\d+", "", well_id)]
+  
+  remove("well_list")
+}
+
+```
+  
+#### Pool Summary    
+```{r well_summary_table1, results = "asis"}
+pool_info <- well_info %>%
+  dplyr::group_by(pool_id) %>%
+  dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
+            total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+names(pool_info) <- stringr::str_to_title(gsub("_", " ", names(pool_info)))
+pool_info %>%
+  gt::gt() %>%
+  gt::cols_align(align = "right", columns = 2:3)
+```  
+  
+#### Detailed Well Summary  
+```{r well_summary_table, results = "asis"}
+unique_pools <- sort(unique(well_info$pool_id))
 
 well_summary_table <- well_info %>% 
-  gather(key = Variable, value = Value, all_of(vnames)) %>% 
-  full_join(df_vars, by = "Variable") %>% 
+  gather(key = Variable, value = Value, all_of(vnames)) %>%   # all variables long
+  full_join(df_vars, by = "Variable") %>%  
   group_by(pool_id, Category, Variable, Variable_name) %>% 
   summarize(Median = formatC(median(Value, na.rm=T), big.mark = ",", digits = unique(Round), format = "f"),
             Range = get_range(Value, digits = unique(Round), verbose = F), 
-            CV = round(sd(Value)/mean(Value)*100,1),
+            `CV%` = round(sd(Value)/mean(Value)*100,1),
             .groups = "drop") %>% 
-  arrange(pool_id, Category, Variable_name) %>% ## ensures pools are in order after pivot
+  arrange(Category, Variable_name) %>% 
   tidyr::pivot_wider(id_cols = c("Category","Variable","Variable_name"), 
                      names_from = pool_id, 
-                     values_from = c("Median","Range","CV"),
-                     names_glue = "{pool_id}__{.value}") %>% 
-  mutate( Plot = sprintf("[Plot](#%s)", Variable)) %>% 
-  select(-Variable)
+                     values_from = c("Median","Range","CV%"),
+                     names_glue = "{pool_id}__{.value}",
+                     names_sort = TRUE) %>%
+  mutate(Plot = sprintf("[Plot](#%s)", Variable)) %>% 
+  select(Category, Variable_name, contains(unique_pools), Plot) # reorder cols by pools first then stats, keep only the clean var name
 
 # well_summary_table_comments <- flag_well_summary(well_summary_table)  # Eventual function to perform well-specific flagging based on summary values
 well_summary_table_comments <- well_summary_table
-set.seed(1105)
-dummycomments <- sample(c("","Warning: message","Fail: message"),
-                        size = nrow(well_summary_table_comments), 
-                        replace=T, prob = c(0.85,0.12,0.03))
+# set.seed(1105)
+# dummycomments <- sample(c("","Warning: message","Fail: message"),
+#                         size = nrow(well_summary_table_comments), 
+#                         replace=T, prob = c(0.85,0.12,0.03))
 
 gt_table <- well_summary_table_comments %>% 
   gt::gt() %>% 
   gt::fmt_markdown(columns = "Plot") %>% # convert the plot column text to markdown to activate links. these links generated with plots below.
   gt::cols_width(vars(Category) ~ px(100),
-                 vars(Variable_name) ~ px(375),
-                 ends_with("Median") ~ px(125),
-                 ends_with("Range") ~ px(150),
-                 ends_with("CV") ~ px(50),
+                 vars(Variable_name) ~ px(150),
+                 ends_with("Median") ~ px(100),
+                 ends_with("Range") ~ px(100),
+                 ends_with("CV%") ~ px(50),
                  vars(Plot) ~ px(60)) %>% 
-  gt:: tab_spanner_delim(delim = "__") %>% 
+  gt::tab_options(table.font.size = 11, column_labels.font.size = 12) %>%
+  gt::tab_spanner_delim(delim = "__") %>% 
   gt::cols_align(align = "right",
                  columns = c(ends_with("Median"), ends_with("Range"))) %>% 
   gt::cols_align(align = "center",
                  columns = vars(Plot)) %>% 
   gt::cols_label(Variable_name = "Variable")
 
-# names(gt_table$`_data`) 
 gt_table
   
 ```  
@@ -126,7 +143,7 @@ gt_table
   
 #### Plots of Well-Level Metrics  
   
-```{r well_plots, results = "asis"}
+```{r well_plots, results = "asis", fig.height = 3.5}
 stm("Generating sequencing and alignment QC plots")
 
 verpal <- hcl.colors(n = n_vars, palette = "viridis")

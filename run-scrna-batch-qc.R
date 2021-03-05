@@ -16,6 +16,11 @@ option_list <- list(
               default = NULL,
               help = "Input sample sheet",
               metavar = "character"),
+  make_option(opt_str = c("-t","--in_batch_meta"),
+              type = "character",
+              default = NULL,
+              help = "Input batch metadata json",
+              metavar = "character"),
   make_option(opt_str = c("-n","--n_cores"),
               type = "integer",
               default = NULL,
@@ -53,7 +58,7 @@ if(!dir.exists(args$out_dir)) {
 
 rmd_path <- file.path(args$out_dir,
                       paste0(args$batch_id,
-                             "_scrna_batch_summary.Rmd"))
+                             "_scrna_batch_summary_parent.Rmd"))
 
 file.copy(system.file("rmarkdown/scrna_batch_summary_parent.Rmd", package = "batchreporter"),
           rmd_path,
@@ -64,7 +69,9 @@ rmarkdown::render(
   params = list(batch   = args$batch_id,
                 in_dir  = args$in_dir,
                 in_key  = args$in_key,
+                in_batch_meta = args$in_batch_meta,
                 n_cores = args$ncores,
+                mc_mb_limit = args$mc_mb_limit,
                 out_dir = args$out_dir),
   output_file = args$out_html,
   quiet = TRUE
