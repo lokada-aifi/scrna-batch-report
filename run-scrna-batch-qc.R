@@ -1,4 +1,5 @@
 library(optparse)
+.libPaths("/home/jupyter/local.lib")
 
 option_list <- list(
   make_option(opt_str = c("-b","--batch_id"),
@@ -20,6 +21,11 @@ option_list <- list(
               type = "character",
               default = NULL,
               help = "Input batch metadata json",
+              metavar = "character"),
+ make_option(opt_str = c("-c","--in_config"),
+              type = "character",
+              default = NULL,
+              help = "Input analysis config csv",
               metavar = "character"),
   make_option(opt_str = c("-n","--n_cores"),
               type = "integer",
@@ -70,6 +76,7 @@ rmarkdown::render(
                 in_dir  = args$in_dir,
                 in_key  = args$in_key,
                 in_batch_meta = args$in_batch_meta,
+                in_config = args$in_config,
                 n_cores = args$ncores,
                 mc_mb_limit = args$mc_mb_limit,
                 out_dir = args$out_dir),

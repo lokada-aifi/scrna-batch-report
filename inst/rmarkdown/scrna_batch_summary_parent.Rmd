@@ -247,6 +247,8 @@ all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet"
 stm("Reading in previous control labeled h5 file meta data")
 
 if(has_controls){
+  controls <- unique(df_key$SampleID[df_key$Type == "Control"])
+
   new_control_h5 <- grep(paste(controls, collapse = "|"), all_labeled_h5, value = TRUE)
   all_control_h5 <- c(all_control_h5, new_control_h5)
 }
@@ -279,7 +281,7 @@ n_wells <- length(wells)
 samples <- unique(df_key$SampleID)
 n_samples <- length(samples)
 
-controls <- df_key$SampleID[df_key$Type == "Control"]
+controls <- unique(df_key$SampleID[df_key$Type == "Control"])
 control_string <- ifelse(has_controls, paste(controls, collapse = ", "), "None")
 
 if (has_controls){
