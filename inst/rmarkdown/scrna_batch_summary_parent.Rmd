@@ -6,8 +6,6 @@ output:
     code_folding: hide
     df_print: paged
     self_contained: true
-    toc: true
-    toc_float: true
   tables: yes
 params:
   batch: "X002"
@@ -754,9 +752,9 @@ label_scores_mito <- function(umapDF, cell_label_column_name,
     group_by(!!rlang::parse_expr(cell_label_column_name)) %>%
     summarize(N = n(), .groups = "drop") %>%
     ungroup() %>%
-    mutate(pct = N/sum(N)) %>%
-    mutate(group = "All")
-
+    mutate(pct = N/sum(N)*100) %>%
+    mutate(group = "All cells")
+ 
   label_order <- names(sort(table(summary_all[,cell_label_column_name]), decreasing = TRUE))
 
   summary_split <- umapDF %>%
@@ -766,17 +764,26 @@ label_scores_mito <- function(umapDF, cell_label_column_name,
     group_by(!!rlang::parse_expr(mito_binary)) %>%
     mutate(pct = N/sum(N)*100 ) %>%
     rename(group = !!mito_binary) %>%
-    mutate(group = paste0("FractionMT",group))
+    mutate(group = paste0("FractionMT",group)) %>% 
+    ungroup()
 
   summary_merge <- rbind(summary_all, summary_split) %>%
     mutate(cell_label = factor(get(cell_label_column_name), levels = label_order))
 
-  ggplot(summary_merge, aes(factor(cell_label, levels = label_order), pct, fill = group))+
-    geom_bar(stat = "identity", position = "dodge") +
+  # ggplot(summary_merge, aes(factor(cell_label, levels = label_order), pct, fill = group))+
+  #   geom_bar(stat = "identity", position = "dodge") +
+  #   xlab("Cell Type Label") +
+  #   ylab("Percent Cell Type within Group") +
+  #   theme(text = element_text(size = 24),
+  #         axis.text.x = element_text(angle = 90))
+  
+  ggplot(summary_merge, aes(group, pct, fill = factor(cell_label, levels = label_order))) +
+    geom_bar(stat = "identity", position = "stack") +
     xlab("Cell Type Label") +
     ylab("Percent Cell Type within Group") +
-    theme(text = element_text(size = 24),
-          axis.text.x = element_text(angle = 90))
+    scale_fill_manual(name = "Cell Type", values = cell_type_palette$cell_color, breaks = cell_type_palette$cell_labels)+
+    theme(text = element_text(size = 24))
+  
 }
 
 label_scores_mito(umapDF, cell_label_column_name)

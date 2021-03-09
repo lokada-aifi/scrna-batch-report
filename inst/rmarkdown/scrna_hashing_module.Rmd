@@ -2,8 +2,9 @@
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
 
 <!-- # ```{r test, include = FALSE} -->
-<!-- # rna_in_dir <- "/Users/lauren.okada/Packages/scrna-batch-report/inst/extdata/FullBatch" -->
-<!-- # in_key <- "/Users/lauren.okada/Packages/scrna-batch-report/inst/extdata/example_sample_key.csv" -->
+<!-- # rna_in_dir <- system.file("extdata/FullBatch", package = "batchreporter") -->
+<!-- # in_key <- system.file("extdata/example_sample_key.csv", package = "batchreporter") -->
+<!-- #  -->
 <!-- # ``` -->
 
 ```{r scrna_hash_dependency_check, include = FALSE}
@@ -16,12 +17,15 @@ assertthat::assert_that(length(dir(file.path(rna_in_dir,"hash"))) > 0,
 # check multiplet h5 exists
 assertthat::assert_that(length(dir(file.path(rna_in_dir,"multiplet_h5"))) > 0, 
                         msg = "Attempting to run scRNA hashing module. Input `rna_in_dir` does not contain multiplet_h5 folder")
+
 # check that we have h5 files provided. Can accept any merged h5 and labeled h5
+h5_file_dir_options <- file.path(rna_in_dir, c("merged_h5","labeled_h5"))
+h5_file_dir <- h5_file_dir_options[dir.exists(h5_file_dir_options)][1]
 h5_file_dir_options <- file.path(rna_in_dir, c("merged_h5","labeled_h5"))
 assertthat::assert_that(any(dir.exists(h5_file_dir_options)))
 
-h5_file_type <- ifelse(h5_file_dir == h5_file_dir_options[2],"merged" ,
-                       ifelse( h5_file_dir == h5_file_dir_options[3],"labeled", 
+h5_file_type <- ifelse(h5_file_dir == h5_file_dir_options[1],"merged" ,
+                       ifelse( h5_file_dir == h5_file_dir_options[2],"labeled", 
                                stop("scrna seq module requires an h5 input folder in input directory")))
 
 assertthat::assert_that(exists("in_key"))
@@ -96,7 +100,7 @@ if(!exists("well_hto_json_df")){
 ```{r scrna_hash_read_hash}
 if(!exists("multiplet_hash")) {
   stm("Reading in hash matrixes from labeled h5 and multiplet h5 files")
-  labeled_hash_list <- future_lapply(all_labeled_h5, read_h5_dgCMatrix, target = "hash")
+  labeled_hash_list <- future_lapply(all_h5, H5weaver::read_h5_dgCMatrix, target = "hash")
   labeled_hash <- do.call(cbind, labeled_hash_list)
   
   multiplet_hash_list <- future_lapply(all_multiplet_h5, read_h5_dgCMatrix, target = "hash")

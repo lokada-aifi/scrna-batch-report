@@ -11,6 +11,7 @@ merged_so_pcaresults.rds
 inst/rmarkdown/.ipynb_checkpoints/
 inst/rmarkdown/meta.Rds
 testing_code/
-inst/rmarkdown/figure
-testing_code
+inst/rmarkdown/figure/
+inst/rmarkdown/scrna_batch_summary_parent_files/
+testing_code/
 inst/rmarkdown/scrna_batch_summary_parent.html
