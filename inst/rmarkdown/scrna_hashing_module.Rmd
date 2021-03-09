@@ -166,6 +166,7 @@ pool_info %>%
 
 #####  Well HTO UMI Counts
 ```{r all_hto_counts, results="asis"}
+stm("Output barplot total hto umi per pool")
 hash_by_well <- all_hash_fmt[,.(hto_count=sum(count)), 
                              by = .(pool_id, well_id, hto, sample_pool_hto, hto_name_barcode)]
 
@@ -191,6 +192,7 @@ make_subchunk(g, subchunk_name = "hto_totalumi_subchunk",quiet_knit = T,
 
 #####  Well HTO UMI Counts by HTO  
 ```{r all_hto_counts_by_hto, , results="asis"}
+stm("Output barplot total hto umi per pool per hto")
 g2 <- qc_aligned_barplot_facet(hash_by_well, 
                                category_x = "well_id", 
                                name_x = "Wells", 
@@ -217,7 +219,7 @@ Showing number of cells positively associated with each hash tag for each well. 
 
 ##### HTO Positive Cells per Well   
 ```{r hto_positive_matrix, results="asis"}
-
+stm("Output heatmap positive hto per well")
 # Expected HTO per well based on input sample sheet
 all_wells <- trimws(unique(unlist(strsplit(df_key$WellID, split = ";"))))
 all_hto <- in_hto_key$hto_name
