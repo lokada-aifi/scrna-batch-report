@@ -219,7 +219,7 @@ Showing number of cells positively associated with each hash tag for each well. 
 
 ##### HTO Positive Cells per Well   
 ```{r hto_positive_matrix, results="asis"}
-stm("Output heatmap positive hto per well")
+stm("Calculations for heatmap positive hto per well")
 # Expected HTO per well based on input sample sheet
 all_wells <- trimws(unique(unlist(strsplit(df_key$WellID, split = ";"))))
 all_hto <- in_hto_key$hto_name
@@ -259,6 +259,7 @@ df_expected_hto$hto_detection_status <-  mapply(function(x, y){
 
 # Heat Map 
 # temp_scale <- scales::rescale(c(0, 5, 1, max(df_expected_hto$n_positive_cells)))
+stm("Output heatmap positive hto per well")
 hm_pos <- ggplot(df_expected_hto, aes(hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = T)))) +
   geom_tile(aes(fill = n_positive_cells, color = hto_detection_status), 
             width = 0.7, height = 0.7, size = 1) +

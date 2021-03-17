@@ -969,7 +969,7 @@ labels_order_ctrl <- all_control[,get(cell_label_column_name)][match(all_control
 # labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
 names(labels_order_ctrl) <- colnames(ctrl_so)
 
-jackstraw_cells_ctrl <- batcherporter::sample_cells(labels_order_ctrl, 100)
+jackstraw_cells_ctrl <- batchreporter::sample_cells(labels_order_ctrl, 100)
 jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
 
 jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 
