@@ -197,6 +197,11 @@ suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
 meta_list <- future_lapply(all_labeled_h5, read_h5_cell_meta)
 
+meta_cols_keep <- c("barcodes", "batch_id", "cell_name", "cell_uuid", "chip_id", "hto_barcode", "hto_category", "n_genes", 
+                    "n_mito_umis", "n_reads", "n_umis", "original_barcodes", sample_column_name, "pool_id", cell_label_column_name, 
+                    cell_label_score_column_name, "well_id")
+meta_list <- future_lapply(meta_list, function(x){x[, meta_cols_keep]})
+
 # Create metadata table that contains only singlet cells
 meta <- do.call(rbind, meta_list)
 setDT(meta)
@@ -208,6 +213,8 @@ remove("meta_list")
 # Create meta data table that includes missing hashes and multiplet data
 stm("Reading in multiplet h5 file meta data")
 multiplet_meta_list <- future_lapply(all_multiplet_h5, read_h5_cell_meta)
+multiplet_meta_list <- future_lapply(multiplet_meta_list, function(x){x[, meta_cols_keep]})
+
 multiplet_meta <- do.call(rbind, multiplet_meta_list)
 setDT(multiplet_meta)
 
