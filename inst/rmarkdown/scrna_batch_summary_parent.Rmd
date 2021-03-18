@@ -252,6 +252,12 @@ if(has_controls){
 }
 
 control_meta_list <- future_lapply(all_control_h5, read_h5_cell_meta)
+
+meta_cols_keep <- c("barcodes", "batch_id", "cell_name", "cell_uuid", "chip_id", "hto_barcode", "hto_category", "n_genes", 
+                    "n_mito_umis", "n_reads", "n_umis", "original_barcodes", sample_column_name, "pool_id", cell_label_column_name, 
+                    cell_label_score_column_name, "well_id")
+control_meta_list <- future_lapply(control_meta_list, function(x){x[, meta_cols_keep]})
+
 all_control <- do.call(rbind, control_meta_list)
 setDT(all_control)
 
