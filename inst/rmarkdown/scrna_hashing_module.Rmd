@@ -304,13 +304,13 @@ for (i in seq_along(pools)){
   # pool data
   df <- all_hash_fmt %>% 
     dplyr::filter(pool_id == pools[i]) %>% 
-     dplyr::mutate(well_id = factor(well_id, levels = sort(unique(well_id)))) 
+    dplyr::mutate(well_id = factor(well_id, levels = sort(unique(well_id), decreasing=T))) 
   
   # cutoff line segment
   df_lines <- df %>%
     dplyr::select(well_id, sample_hto, hto, cutoff, log_cutoff)  %>% 
-    dplyr::filter(!is.na(log_cutoff))%>% 
-     dplyr::distinct() 
+    dplyr::filter(!is.na(log_cutoff)) %>% 
+    dplyr::distinct() 
   
   # labels for hash not detected
   detected_labels <- df %>% 
@@ -322,7 +322,7 @@ for (i in seq_along(pools)){
   x_label <- (x_max - x_min)/2 + x_min
 
   # Plot
-  g_ridge <- ggplot(df, aes(x =log_count, y=factor(well_id, levels = sort(unique(well_id), decreasing = T)))) +
+  g_ridge <- ggplot(df, aes(x = log_count, y = well_id)) +
     ggridges::geom_density_ridges(
                                   scale = 7, 
                                   stat = "binline",
