@@ -1,0 +1,5 @@
+{
+    "cellranger_version": "CellRanger 4.0",
+    "mapping_reference": "hg38",
+    "labeling_method": "Seurat v.3.0"
+}

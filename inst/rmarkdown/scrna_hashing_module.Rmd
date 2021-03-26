@@ -143,6 +143,15 @@ all_hash_fmt[, log_cutoff := ifelse(detected, log_cutoff, NA)]  # censor cutoffs
 
 pools <- unique(all_hash_fmt$pool_id)
 ```  
+
+```{r scrna_hash_meta_setup, fig.width = 6, fig.height = 30}
+meta[in_hto_key, on = 'hto_barcode', hto_name := i.hto_name]  # merge in the hto names
+# meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, sample_pool)]
+meta[ , sample_hto:= sprintf("%s\n%s", hto_name, get(sample_column_name))]
+meta[ , sample_hto_pool:= sprintf("%s\n%s%s", hto_name, get(sample_column_name),pool_id)]
+
+all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
+```  
 </details>  
 <!-- end of details section collapsing multiple no-output code blocks to save space -->
 
@@ -260,11 +269,11 @@ df_expected_hto$hto_detection_status <-  mapply(function(x, y){
 # Heat Map 
 # temp_scale <- scales::rescale(c(0, 5, 1, max(df_expected_hto$n_positive_cells)))
 stm("Output heatmap positive hto per well")
-hm_pos <- ggplot(df_expected_hto, aes(hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = T)))) +
+hm_pos <- ggplot(df_expected_hto, aes(hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = TRUE)))) +
   geom_tile(aes(fill = n_positive_cells, color = hto_detection_status), 
             width = 0.7, height = 0.7, size = 1) +
   scale_fill_viridis_c(option = "D", na.value = "grey") +
-    scale_color_manual(breaks = c("Not Used", "Detected","Missing"), values = c("grey","black","red")) +
+    scale_color_manual(breaks = c("Not Used", "Detected","Missing"), values = c("grey","black","red"), drop = FALSE) +
   scale_x_discrete(position = "top") +
   xlab("HTO") +
   ylab("Well") +
@@ -506,7 +515,8 @@ make_subchunk(g, subchunk_name = "hto_cat_fraction_subchunk",
 
 [Return to Top](#top_cell_hashing)  
 
-#### Singlet Summaries (hash-based)  
+#### Singlet Summaries (well-based)  
+
 
 ##### HTO Barcode Count per Well Plot  
 
@@ -583,7 +593,6 @@ g <- qc_stacked_barplot_facet(meta = meta,
                    name_y = "Fraction of Cells",
                    as_fraction = TRUE, 
                    facet_formula = formula("~pool_id"), nrow = 1, scales = "free_x") +
-  ggtitle("HTO Barcode Fraction per Well")+
     theme(text = element_text(size = 12))
 
 temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
@@ -596,6 +605,119 @@ batchreporter::make_subchunk(g, subchunk_name = "hto_fraction_subchunk",
   
 [Return to Top](#top_cell_hashing)  
   
+##### Read Counts by HTO and Well  
+<details>  
+  <summary>Expand Reads/cell distributions per per well and hto </summary>  
+  
+```{r Read Count By HTO and Well Violin Plot, class.output = "superbigimage", results="asis"}
+stm("Plotting read count violin plots per hto and well")  
+
+all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,  df_key$PoolID))
+
+plot_list <- list()
+for(i in seq_along(all_sample_hto_pool)){
+    temp_meta <- filter(meta, sample_hto_pool == all_sample_hto_pool[i])
+    g <- qc_violin_plot(temp_meta,
+                        category_x = "well_id",
+                        name_x = "Well",
+                        column_y = "n_reads",
+                        name_y = "N Reads per Cell",
+                        fill = "dodgerblue") +
+      theme(text = element_text(size =8)) +
+      ggtitle(all_sample_hto_pool[i])
+    plot_list[[i]] <- g
+}
+
+g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 6)
+
+temp_figwidth <- 15
+temp_figheight <- ceiling(n_samples/6)*2 + 0.4
+batchreporter::make_subchunk(g_grid, subchunk_name = "reads_well_hto_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+
+```
+</details>  
+
+[Return to Top](#top_cell_hashing) 
+  
+##### UMI Counts by HTO and Well  
+<details>  
+  <summary>Expand UMIs/cell distributions per per well and hto </summary>  
+  
+```{r UMI Count By HTO and Well Violin Plot, class.output = "superbigimage", results="asis"}
+stm("Plotting umi count violin plots per hto and well")  
+
+all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,  df_key$PoolID))
+
+plot_list <- list()
+for(i in seq_along(all_sample_hto_pool)){
+    
+    temp_meta <- filter(meta, sample_hto_pool == all_sample_hto_pool[i])
+    g <- qc_violin_plot(temp_meta,
+                        category_x = "well_id",
+                        name_x = "Well",
+                        column_y = "n_umis",
+                        name_y = "N UMIs per Cell",
+                        fill = "purple") +
+      theme(text = element_text(size =8)) +
+      ggtitle(all_sample_hto_pool[i])
+    plot_list[[i]] <- g
+}
+
+g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 6)
+
+temp_figwidth <- 15
+temp_figheight <- ceiling(n_samples/6)*2 + 0.4
+batchreporter::make_subchunk(g_grid, subchunk_name = "umis_well_hto_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+```
+</details>    
+
+[Return to Top](#top_cell_hashing) 
+
+##### Gene Counts by HTO and Well  
+<details>  
+  <summary>Expand Genes/cell distributions per per well and hto </summary>  
+  
+```{r Gene Count By HTO and Well Violin Plot, class.output = "superbigimage", results="asis"}
+stm("Plotting gene count violin plots per hto and well")  
+
+all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,  df_key$PoolID))
+
+plot_list <- list()
+for(i in seq_along(all_sample_hto_pool)){
+    
+    temp_meta <- filter(meta, sample_hto_pool == all_sample_hto_pool[i])
+    g <- qc_violin_plot(temp_meta,
+                        category_x = "well_id",
+                        name_x = "Well",
+                        column_y = "n_genes",
+                        name_y = "N Genes per Cell",
+                        fill = "orangered") +
+      theme(text = element_text(size =8)) +
+      ggtitle(all_sample_hto_pool[i])
+    plot_list[[i]] <- g
+}
+
+g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 6)
+
+temp_figwidth <- 15
+temp_figheight <- ceiling(n_samples/6)*2 + 0.4
+batchreporter::make_subchunk(g_grid, subchunk_name = "genes_well_hto_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+```  
+</details>  
+  
+[Return to Top](#top_cell_hashing) 
+
+
+<!-- end of details section collapsing multiple no-output code blocks to save space -->
+  
+#### Singlet Summaries (hash-based)  
+
 ##### Well Count per HTO Barcode Plot  
 
 ```{r Well Count By HTO Barcode Plot, class.output = "superbigimage", results="asis"}
@@ -610,8 +732,7 @@ for (i in seq_along(pools)){
                    name_x = "HTO Barcode",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
-                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) +
-  ggtitle("Well Fraction per HTO Barcode")
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) 
 }
 
 g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
@@ -652,8 +773,7 @@ g <- qc_stacked_barplot_facet(meta = meta,
                    colorset_y = "varibow",
                    name_y = "Fraction of Cells",
                    as_fraction = TRUE , 
-                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) +
-  ggtitle("Well Fraction per HTO Barcode")
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE)
 
 temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
@@ -732,7 +852,7 @@ plot_grid(plotlist = umis_violin_list,
   
 [Return to Top](#top_cell_hashing)  
   
-##### UMI Counts by HTO Category and Barcode  
+##### Gene Counts by HTO Category and Barcode  
 
 ```{r gene_counts, height = 5, width = 12}
 # Genes per category plot
