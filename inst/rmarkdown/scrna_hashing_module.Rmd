@@ -75,6 +75,15 @@ if(!exists("df_key")){
 
 ```
 
+```{r scrna_hash_meta_setup, fig.width = 6, fig.height = 30}
+meta[in_hto_key, on = 'hto_barcode', hto_name := i.hto_name]  # merge in the hto names
+# meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, sample_pool)]
+meta[ , sample_hto:= sprintf("%s\n%s", hto_name, get(sample_column_name))]
+meta[ , sample_hto_pool:= sprintf("%s\n%s%s", hto_name, get(sample_column_name),pool_id)]
+
+all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
+```  
+
 
 ```{r scrna_hash_read_json}
 # Read in json files
@@ -144,14 +153,7 @@ all_hash_fmt[, log_cutoff := ifelse(detected, log_cutoff, NA)]  # censor cutoffs
 pools <- unique(all_hash_fmt$pool_id)
 ```  
 
-```{r scrna_hash_meta_setup, fig.width = 6, fig.height = 30}
-meta[in_hto_key, on = 'hto_barcode', hto_name := i.hto_name]  # merge in the hto names
-# meta[ , plot_barcode:= sprintf("%s\n%s", hto_barcode, sample_pool)]
-meta[ , sample_hto:= sprintf("%s\n%s", hto_name, get(sample_column_name))]
-meta[ , sample_hto_pool:= sprintf("%s\n%s%s", hto_name, get(sample_column_name),pool_id)]
 
-all_meta[ , hto_category := factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
-```  
 </details>  
 <!-- end of details section collapsing multiple no-output code blocks to save space -->
 
@@ -528,8 +530,8 @@ stm("Plotting barcode count per well and hto")
 #   plot_list[[i]] <- qc_aligned_barplot_facet(meta = meta[meta$pool_id == pools[i]],
 #                    category_x = "well_id",
 #                    name_x = "Well ID",
-#                    category_y = "plot_barcode",
-#                    category_name = "HTO Barcode",
+#                    category_y = "sample_hto_pool",
+#                    category_name = "HTO/Sample",
 #                    colorset_y = "varibow",
 #                    name_y = "Number of Cells",
 #                    padding = 0.2,
@@ -543,8 +545,8 @@ stm("Plotting barcode count per well and hto")
 g <- qc_aligned_barplot_facet(meta = meta,
                    category_x = "well_id",
                    name_x = "Well ID",
-                   category_y = "plot_barcode",
-                   category_name = "HTO Barcode",
+                   category_y = "sample_hto_pool",
+                   category_name = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
                    padding = 0.2,
@@ -572,8 +574,8 @@ stm("Plotting barcode fraction per well and hto")
 #   plot_list[[i]] <- qc_stacked_barplot_facet(meta = meta[pool_id==pools[i]],
 #                    category_x = "well_id",
 #                    name_x = "Well ID",
-#                    category_y = "plot_barcode",
-#                    category_name = "HTO Barcode",
+#                    category_y = "sample_hto_pool",
+#                    category_name = "HTO/Sample",
 #                    colorset_y = "varibow",
 #                    name_y = "Fraction of Cells",
 #                    as_fraction = TRUE, 
@@ -587,8 +589,8 @@ stm("Plotting barcode fraction per well and hto")
 g <- qc_stacked_barplot_facet(meta = meta,
                    category_x = "well_id",
                    name_x = "Well ID",
-                   category_y = "plot_barcode",
-                   category_name = "HTO Barcode",
+                   category_y = "sample_hto_pool",
+                   category_name = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Fraction of Cells",
                    as_fraction = TRUE, 
@@ -726,10 +728,10 @@ stm("Plotting well count per hto")
 plot_list <- list()
 for (i in seq_along(pools)){
   plot_list[[i]] <- qc_aligned_barplot_facet(meta = meta[pool_id == pools[i],],
-                   category_x = "plot_barcode",
+                   category_x = "sample_hto_pool",
                    category_y = "well_id",
                    category_name = "Well ID",
-                   name_x = "HTO Barcode",
+                   name_x = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
                    facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) 
@@ -753,10 +755,10 @@ stm("Plotting well fraction per hto")
 # plot_list <- list()
 # for (i in seq_along(pools)){
 #   plot_list[[i]] <- qc_stacked_barplot_facet(meta = meta[pool_id == pools[i],],
-#                    category_x = "plot_barcode",
+#                    category_x = "sample_hto_pool",
 #                    category_y = "well_id",
 #                    category_name = "Well ID",
-#                    name_x = "HTO Barcode",
+#                    name_x = "HTO/Sample",
 #                    colorset_y = "varibow",
 #                    name_y = "Fraction of Cells",
 #                    as_fraction = TRUE , 
@@ -766,10 +768,10 @@ stm("Plotting well fraction per hto")
 # g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 
 g <- qc_stacked_barplot_facet(meta = meta,
-                   category_x = "plot_barcode",
+                   category_x = "sample_hto_pool",
                    category_y = "well_id",
                    category_name = "Well ID",
-                   name_x = "HTO Barcode",
+                   name_x = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Fraction of Cells",
                    as_fraction = TRUE , 
@@ -798,8 +800,8 @@ category_reads_violins <- qc_violin_plot(all_meta,
 
 # Reads per hto plot
 g_read <- qc_violin_plot(meta,
-                        category_x = "plot_barcode",
-                        name_x = "HTO Barcode (singlets)",
+                        category_x = "sample_hto_pool",
+                        name_x = "HTO/Sample (singlets)",
                         column_y = "n_reads",
                         name_y = "N Reads per Cell, Singlets",
                         log_y = TRUE,
@@ -831,8 +833,8 @@ category_umis_violins <- qc_violin_plot(all_meta,
 
 # UMI per cell plot
 g_umi <- qc_violin_plot(meta,
-                        category_x = "plot_barcode",
-                        name_x = "HTO Barcode (singlets)",
+                        category_x = "sample_hto_pool",
+                        name_x = "HTO/Sample (singlets)",
                         column_y = "n_umis",
                         name_y = "N UMIs per Cell, Singlets",
                         fill = "purple") +
@@ -864,8 +866,8 @@ category_genes_violins <- qc_violin_plot(all_meta,
                                          fill = "orangered")
 # Genes per cell plot
 g_genes <- qc_violin_plot(meta,
-                        category_x = "plot_barcode",
-                        name_x = "HTO Barcode (singlets)",
+                        category_x = "sample_hto_pool",
+                        name_x = "HTO/Sample (singlets)",
                         column_y = "n_genes",
                         name_y = "N Genes per Cell, Singlets",
                         fill = "orangered") +
