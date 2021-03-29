@@ -1,5 +1,4 @@
 library(optparse)
-.libPaths("/home/jupyter/local.lib")
 
 option_list <- list(
   make_option(opt_str = c("-b","--batch_id"),
@@ -22,7 +21,7 @@ option_list <- list(
               default = NULL,
               help = "Input batch metadata json",
               metavar = "character"),
- make_option(opt_str = c("-c","--in_config"),
+  make_option(opt_str = c("-c","--in_config"),
               type = "character",
               default = NULL,
               help = "Input analysis config csv",
@@ -77,7 +76,7 @@ rmarkdown::render(
                 in_key  = args$in_key,
                 in_batch_meta = args$in_batch_meta,
                 in_config = args$in_config,
-                n_cores = args$ncores,
+                n_cores = args$n_cores,
                 mc_mb_limit = args$mc_mb_limit,
                 out_dir = args$out_dir),
   output_file = args$out_html,
@@ -86,6 +85,3 @@ rmarkdown::render(
 
 file.remove(rmd_path)
 
-# Remove figure files generated
-# fig_path <- file.path(args$out_dir,"figures")
-# file.remove(fig_path, recursive = TRUE)

@@ -272,10 +272,10 @@ df_expected_hto$hto_detection_status <-  mapply(function(x, y){
 # temp_scale <- scales::rescale(c(0, 5, 1, max(df_expected_hto$n_positive_cells)))
 stm("Output heatmap positive hto per well")
 hm_pos <- ggplot(df_expected_hto, aes(hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = TRUE)))) +
-  geom_tile(aes(fill = n_positive_cells, color = hto_detection_status), 
+  geom_tile(aes(fill = n_positive_cells, factor(hto_detection_status, levels = c("Not Used", "Detected","Missing"))), 
             width = 0.7, height = 0.7, size = 1) +
   scale_fill_viridis_c(option = "D", na.value = "grey") +
-    scale_color_manual(breaks = c("Not Used", "Detected","Missing"), values = c("grey","black","red"), drop = FALSE) +
+  scale_color_manual(name = "hto_detection_status", breaks = c("Not Used", "Detected","Missing"), values = c("grey","black","red"), drop = FALSE) +
   scale_x_discrete(position = "top") +
   xlab("HTO") +
   ylab("Well") +
@@ -443,7 +443,7 @@ pool_summary <- all_meta[ ,.(n_cells = .N,
                              median_umis = median(n_umis),
                              median_genes = median(n_genes)), 
                           by = .(pool_id, hto_category)]
-setorder(pool_summary,pool_id, hto_category)
+setorder(pool_summary, pool_id, hto_category)
 pool_summary[, pct_cells := round(n_cells/sum(n_cells)*100,1), by = pool_id]
 setcolorder(pool_summary, c("pool_id", "hto_category", "n_cells", "pct_cells", 
                             "median_reads", "median_umis", "median_genes"))

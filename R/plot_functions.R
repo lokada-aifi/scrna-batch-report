@@ -126,8 +126,8 @@ qc_stacked_barplot_facet <- function (meta,
 #' @export
 #' @examples
 #' set.seed(3)
-#' test_data_1 <- data.frame(batch_id=sample(c("B001","B002"),1000, replace = T),
-#'                         well_id = sample(c("W1","W2","W3"),1000, replace = T),
+#' test_data_1 <- data.frame(batch_id=sample(c("B001","B002"),1000, replace = TRUE),
+#'                         well_id = sample(c("W1","W2","W3"),1000, replace = TRUE),
 #'                         sample_names= 1:1000)
 #' qc_aligned_barplot_facet(test_data_1,
 #'                          category_x = "batch_id",
@@ -140,12 +140,12 @@ qc_stacked_barplot_facet <- function (meta,
 #'
 #' test_data <- rbind(data.frame(row=1:1000,
 #'                               pool_id="P1",
-#'                               well_id = sample(c("W1","W2","W3"),1000, replace = T),
-#'                               sample_id= sample(1:3, 1000, replace = T)),
+#'                               well_id = sample(c("W1","W2","W3"),1000, replace = TRUE),
+#'                               sample_id= sample(1:3, 1000, replace = TRUE)),
 #'                    data.frame(row=1001:2000,
 #'                               pool_id="P2",
-#'                               well_id = sample(c("W4","W5","W6"),1000, replace = T),
-#'                               sample_id= sample(4:6, 1000, replace = T)))
+#'                               well_id = sample(c("W4","W5","W6"),1000, replace = TRUE),
+#'                               sample_id= sample(4:6, 1000, replace = TRUE)))
 #' qc_aligned_barplot_facet(test_data,
 #'                          category_x = "well_id",
 #'                          name_x = "Well ID",
@@ -157,10 +157,11 @@ qc_stacked_barplot_facet <- function (meta,
 #'                          facet_formula = formula("~pool_id"),
 #'                          scales = "free")
 #'
-#' test_data_3 <- rbind(expand_grid(pool_id = "P1",
+#' \dontrun{  # uses tidyr
+#' test_data_3 <- rbind(tidyr::expand_grid(pool_id = "P1",
 #'                                sample_id = c("S1","S2","S3"),
 #'                                well_id = c("W1","W2","W3")),
-#'                    expand_grid(pool_id = "P2",
+#'                    tidyr::expand_grid(pool_id = "P2",
 #'                                sample_id = c("S4","S5","S6"),
 #'                                well_id = c("W4","W5","W6"))
 #'                  )
@@ -177,7 +178,7 @@ qc_stacked_barplot_facet <- function (meta,
 #'     variable_y_identity = "n_cells",
 #'     facet_formula = formula("~pool_id"),
 #'     scales = "free")
-#'
+#' }
 qc_aligned_barplot_facet <- function(meta,
                                      category_x = "batch_id",
                                      name_x = "Batch ID",
@@ -326,8 +327,8 @@ qc_aligned_barplot_facet <- function(meta,
 #' If need to add spacing to both, make separate calls to `add_axis_title_spacing_plotly()`
 #' @param n_lines Numeric value. Number of lines worth of spacing to add.
 #' @return A the original plotly object with updated axis name
-#' @export
 #' @examples
+#' \dontrun{  # THIS FUNCTION NOT CURRENTLY EXPORTED
 #' library(ggplot2)
 #' library(plotly)
 #' library(dplyr)
@@ -348,6 +349,7 @@ qc_aligned_barplot_facet <- function(meta,
 #' gp %>%
 #'   add_axis_title_spacing_plotly("x", 3) %>%
 #'   add_axis_title_spacing_plotly("y", 3)
+#' }
 #'
 add_axis_title_spacing_plotly <- function(plotly_obj, axis, n_lines){
   assertthat::assert_that(is.character(axis))

@@ -1,5 +1,5 @@
-.libPaths("/home/jupyter/local.lib")
 library(optparse)
+.libPaths("/home/jupyter/local.lib")
 
 option_list <- list(
   make_option(opt_str = c("-b","--batch_id"),
@@ -17,6 +17,26 @@ option_list <- list(
               default = NULL,
               help = "Input sample sheet",
               metavar = "character"),
+  make_option(opt_str = c("-t","--in_batch_meta"),
+              type = "character",
+              default = NULL,
+              help = "Input batch metadata json",
+              metavar = "character"),
+  make_option(opt_str = c("-c","--in_config"),
+              type = "character",
+              default = NULL,
+              help = "Input analysis config csv",
+              metavar = "character"),
+  make_option(opt_str = c("-n","--n_cores"),
+              type = "integer",
+              default = NULL,
+              help = "Number of cores for multicore processing",
+              metavar = "integer"),
+  make_option(opt_str = c("-m","--mc_mb_limit"),
+              type = "integer",
+              default = NULL,
+              help = "Maximum size in Mb allowed for exporting globals to each worker in multicore processing",
+              metavar = "integer"),
   make_option(opt_str = c("-d","--out_dir"),
               type = "character",
               default = NULL,
@@ -29,8 +49,7 @@ option_list <- list(
               metavar = "character")
 )
 
-opt_parser <- OptionParser(option_list = option_
-list)
+opt_parser <- OptionParser(option_list = option_list)
 
 args <- parse_args(opt_parser)
 
@@ -45,14 +64,9 @@ if(!dir.exists(args$out_dir)) {
 
 rmd_path <- file.path(args$out_dir,
                       paste0(args$batch_id,
-                             "_scrna_batch_summary.Rmd"))
+                             "_scrna_batch_summary_parent.Rmd"))
 
-# file.copy(system.file("rmarkdown/scrna_batch_summary.Rmd", package = "XXX"),
-#           rmd_path,
-#           overwrite = TRUE)
-
-#file.copy("~/Packages/scrna-batch-report/scrna_batch_summary.Rmd",
-file.copy("/home/jupyter/scrna-batch-report/inst/rmarkdown/scrna_batch_summary.Rmd",
+file.copy(system.file("rmarkdown/scrna_batch_summary_parent.Rmd", package = "batchreporter"),
           rmd_path,
           overwrite = TRUE)
 
@@ -61,9 +75,14 @@ rmarkdown::render(
   params = list(batch   = args$batch_id,
                 in_dir  = args$in_dir,
                 in_key  = args$in_key,
+                in_batch_meta = args$in_batch_meta,
+                in_config = args$in_config,
+                n_cores = args$n_cores,
+                mc_mb_limit = args$mc_mb_limit,
                 out_dir = args$out_dir),
   output_file = args$out_html,
   quiet = TRUE
 )
 
 file.remove(rmd_path)
+

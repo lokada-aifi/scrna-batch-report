@@ -4,7 +4,7 @@
 \alias{load_config}
 \title{Load config file}
 \usage{
-load_config(in_config, vector_delim = ";", file = TRUE)
+load_config(in_config, vector_delim = ";")
 }
 \arguments{
 \item{in_config}{Character value. Full file path to the config file.}

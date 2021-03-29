@@ -22,6 +22,7 @@ Note: This does not work as expected in Rmarkdown
 Add lines of whitespace to x-axis or y-axis title to shift title down or left.
 }
 \examples{
+\dontrun{  # THIS FUNCTION NOT CURRENTLY EXPORTED
 library(ggplot2)
 library(plotly)
 library(dplyr)
@@ -42,5 +43,6 @@ gp
 gp \%>\%
   add_axis_title_spacing_plotly("x", 3) \%>\%
   add_axis_title_spacing_plotly("y", 3)
+}
 
 }
