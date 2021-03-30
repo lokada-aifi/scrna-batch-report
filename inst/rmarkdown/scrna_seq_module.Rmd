@@ -2,13 +2,25 @@
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
 <!-- Note: should this be changed to just sample_h5? to allow for other types of h5 files? ie metadata-injected h5 pre-hashing? -->
 
+```{r}
+scrna_seq_module_version <- "1.0.0"
+
+```
+
 The following metrics summarize the sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  
+
+#### Contents 
+
+##### [Pool Summary](#pool_seq_summary)
+##### [Detailed Well Summary](#well_seq_summary)
+##### [Plots of Well-Level Metrics](#seq_metrics_plots)  
+
 
 ```{r scrna_seq_dependency_check, include = FALSE}
 assertthat::assert_that(exists("rna_in_dir"))
 
 # check that we have h5 files provided. Can accept any type where 10x metadata has been injected
-h5_file_dir_options <- file.path(rna_in_dir, c("injected_h5","merged_h5","labeled_h5"))
+h5_file_dir_options <- file.path(rna_in_dir, c("meta_h5","merged_h5","labeled_h5"))
 assertthat::assert_that(any(dir.exists(h5_file_dir_options)))
 
 # which set of h5 of file will be used. current priority is cellranger, then merged, then labeled
@@ -78,7 +90,10 @@ if(!exists("well_info")){
 }
 
 ```
-  
+
+<a  id="pool_seq_summary"></a> 
+
+
 #### Pool Summary    
 ```{r well_summary_table1, results = "asis"}
 pool_info <- well_info %>%
@@ -90,6 +105,9 @@ pool_info %>%
   gt::gt() %>%
   gt::cols_align(align = "right", columns = 2:3)
 ```  
+[Return to Top](#rna_seq_top) 
+
+<a  id="well_seq_summary"></a>  
   
 #### Detailed Well Summary  
 ```{r well_summary_table, results = "asis"}
@@ -139,7 +157,19 @@ gt_table <- well_summary_table_comments %>%
 gt_table
   
 ```  
-  
+
+<details>
+  <summary>Expand table of statistics per well</summary> 
+```{r well_info_table}
+qc_table(well_info)
+
+```  
+
+</details>   
+
+[Return to Top](#rna_seq_top) 
+
+<a  id="seq_metrics_plots"></a> 
   
 #### Plots of Well-Level Metrics  
   
@@ -183,3 +213,4 @@ for (i in seq_along(vnames)){
 
 ``` 
   
+scRNA seq report module v.`r {scrna_seq_module_version}`

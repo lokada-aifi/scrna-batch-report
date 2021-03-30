@@ -19,7 +19,7 @@ params:
 ---
 
 <!-- create details section to collapse multiple no-output code blocks to save space -->
-<details>  
+<details style="color: lightgray;"> 
   <summary>Expand Code</summary> 
   
 ```{r setup, include = TRUE}
@@ -238,6 +238,7 @@ meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_threshold,
                                          paste0(">",fct_mito_umi_threshold),
                                          paste0("<=",fct_mito_umi_threshold)))]
 meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+meta[ , sample_pool:= factor(sample_pool, levels = unique(sample_pool[order(pool_id, get(sample_column_name))]))]
 meta[ , fct_mito_group:=cut(fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf),
                            labels = c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30"))]
 
@@ -247,6 +248,7 @@ all_meta[, ":="(fct_mito_umi_binary = ifelse(fct_mito_umi > fct_mito_umi_thresho
                                              paste0(">",fct_mito_umi_threshold),
                                              paste0("<=",fct_mito_umi_threshold)))]
 all_meta[ , sample_pool:= sprintf("%s_%s", get(sample_column_name), pool_id)]
+all_meta[ , sample_pool:= factor(sample_pool, levels = unique(sample_pool[order(pool_id, get(sample_column_name))]))]
 
 ```
 
@@ -352,11 +354,20 @@ if(!is.na(in_batch_meta)){
 ```
 
 
-### Quality Metrics
+### Quality Metrics  
 
-Metrics shown for all singlet cells post un-hashing.
+<a id="top_quality_metrics"></a>  
 
-<a id="top_quality_metrics"></a>
+Metrics shown for all singlet cells post un-hashing.  
+
+#### Contents 
+
+##### [Fraction Mitochondrial Reads](#fraction_mito_reads)
+##### [Data Quality UMAP](#data_quality_umap)
+
+<a id="fraction_mito_reads"></a>
+
+#### Fraction Mitochondrial Reads
 
 ```{r pct_mito, results = "asis"}
 meta$fct_mito_group <- cut(meta$fct_mito_umi, breaks = c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf),
@@ -372,7 +383,7 @@ g_bar <- ggplot(meta, aes(sample_pool,  fill = fct_mito_group))+
 g_pl <- plotly::ggplotly(g_bar) %>%
   layout(hovermode = 'compare')
 
-tempwidth <- n_samples*0.5 + 2
+tempwidth <- n_samples*0.4 + 2
 
 make_subchunk(g_pl, subchunk_name = "fraction_mito_subchunk", quiet_knit = T,
               chunk_opt_list = list(fig.width = tempwidth, fig.height = 6))
@@ -380,6 +391,10 @@ make_subchunk(g_pl, subchunk_name = "fraction_mito_subchunk", quiet_knit = T,
 ```
 
 [Return to Top](#top_quality_metrics)
+
+<!-- create details section to collapse multiple no-output code blocks to save space -->
+<details style="color: lightgray;"> 
+  <summary>Expand Code</summary> 
 
 ```{r combine count matrices for all samples}
 stm("Reading and merging all count matrices")
@@ -486,6 +501,7 @@ df_cc <- merged_so[[]][,c("S.Score", "G2M.Score","Phase")] %>%
     tibble::rownames_to_column("barcodes")
 ```
 
+
 ```{r umap_cleanup}
 # Get UMAP coordinates
 umapDF <- merged_so[["umap"]]@cell.embeddings %>%
@@ -504,6 +520,11 @@ if(!all(rownames(umapDF) == colnames(normCounts))){
 }
 
 ```
+
+</details>  
+<!-- end of details section collapsing multiple no-output code blocks to save space -->  
+
+<a id="data_quality_umap"></a>  
 
 #### Data Quality UMAP
 
@@ -611,13 +632,22 @@ cowplot::plot_grid(aligned_plots[[1]],
 [Return to Top](#top_quality_metrics)
 
 
-### Cell Labeling
-
-#### Labeling Method: `r {sprintf("%s, %s", cell_label_method, cell_label_reference)}`
+### Cell Labeling  
 
 <a id="top_cell_labeling"></a>
 
-#### Seurat Labeling Scores
+#### Labeling Method: `r {sprintf("%s, %s", cell_label_method, cell_label_reference)}`
+
+#### Contents 
+##### [Labeling Scores](#labeling_scores)
+##### [UMAP All Cells](#umap_all_cells)
+##### [UMAP by Fraction Mitochondrial UMI](#umap_fct_mito_umi)
+##### [Cell Type by Fraction Mitochondrial UMI](#celltype_fct_mito_umi)
+##### [Marker Visualization](#marker_visualization)
+
+<a id="labeling_scores"></a>
+
+#### Labeling Scores
 
 ```{r cell_labeling, fig.height = 8, fig.width = 20}
 stm("Plotting Seurat labeling score distributions")
@@ -650,7 +680,9 @@ ggplot(meta, aes(get(cell_label_score_column_name), fill = get(cell_label_column
 
 ```
 
-[Return to Top](#top_cell_labeling)
+[Return to Top](#top_cell_labeling)  
+
+<a id="umap_all_cells"></a>
 
 #### UMAP All Cells
 
@@ -730,8 +762,9 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ```
 
-[Return to Top](#top_cell_labeling)
+[Return to Top](#top_cell_labeling)  
 
+<a id="umap_fct_mito_umi"></a>  
 
 #### UMAP by Fraction Mitochondrial UMI  
 
@@ -772,7 +805,9 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ```
 
-[Return to Top](#top_cell_labeling)
+[Return to Top](#top_cell_labeling)  
+
+<a id="celltype_fct_mito_umi"></a>  
 
 #### Cell Types by Fraction Mitochondrial Read Group
 ```{r cell_labeling_mito_celltypes, fig.height = 10, fig.width = 20}
@@ -822,6 +857,8 @@ label_scores_mito <- function(umapDF, cell_label_column_name,
 label_scores_mito(umapDF, cell_label_column_name)
 
 ```
+
+<a id="marker_visualization"></a>   
 
 #### Marker Visualization
 
@@ -882,20 +919,23 @@ cowplot::plot_grid(plotlist = marker_umap_l, ncol = 4)
 
 <a id="top_control"></a> 
 
-Comparing batch bridging control to previous 
+Comparing batch bridging control to previous reference batches.  
+
+#### Contents 
+##### [N Cells per Cell Type](#control_cells_per_type)
+##### [Cell Type Proportions](#control_celltype_proportions)
+##### [Bridging Control UMAP](#scrna_control_umap)
 
 ```{r control_summary, eval=has_controls}
 all_control <- all_control %>% 
   mutate(control_type = ifelse(batch_id == batch, "new", "reference")) 
-by_control <- all_control %>% 
-  group_by(control_type) %>% 
-  summarize(n_cells = n(), 
-            median_reads = median(n_reads), 
-            median_umi = median(n_umis), 
-            median_genes = median(n_genes), 
-            .groups = "drop")
+
 
 ```  
+
+<a id="control_cells_per_type"></a> 
+
+#### N Cells per Cell Type
 
 ```{r control_label_counts, eval=has_controls}
 lab_order <- sort(table(all_control[,get(cell_label_column_name)][all_control$control_type=="reference"]), decreasing = TRUE)
@@ -922,6 +962,10 @@ qc_aligned_barplot(meta=all_control, category_x = "cell_label_fmt", name_x = "Ce
 
 [Return to Top](#top_control)   
 
+<a id="control_celltype_proportions"></a> 
+
+#### Cell Type Proportions
+
 ```{r control_pct_counts, fig.width = 10, class.output = "superbigimage", eval=has_controls}
 
 qc_stacked_barplot(meta=all_control, category_x = "pool_id", name_x = "Pool ID",
@@ -930,7 +974,7 @@ qc_stacked_barplot(meta=all_control, category_x = "pool_id", name_x = "Pool ID",
 
 # g <- ggplot(ctrl_by_type, aes(cell_label_column_name, y = pct)) +
 #   geom_bar(aes(fill = control_type), position = "dodge", stat = "identity")  +
-#   ggtitle("Percent Cells by Label") +
+#   ggtitle("Percent Cells by Label") + 
 #   ylab("Percent All Cells") +
 #   xlab("\n\n\n\n\n\nCell Label") +
 #   theme_bw()+
@@ -943,7 +987,15 @@ qc_stacked_barplot(meta=all_control, category_x = "pool_id", name_x = "Pool ID",
 ```  
 
 [Return to Top](#top_control)   
-  
+
+<a id="scrna_control_umap"></a> 
+
+#### Bridging Control UMAP 
+
+<details style="color: lightgray;"> 
+  <summary>Expand Code</summary> 
+
+   
 ```{r umap_control, eval=has_controls}
 stm("Reading and merging all control count matrices")
 # Merge the count matrices for all samples into 1 table
@@ -1027,10 +1079,6 @@ cumvar_string_ctrl <- sprintf(fmt = "%.1f", var_selected_pc_ctrl*100)
 stm(sprintf("Selected %s significant pcs via jackstraw, %s%% explained variation", nPC_ctrl, cumvar_string_ctrl))
 ```  
 
-```{r eval=has_controls, results="asis"}
-"Batch Control UMAP using `r {nPC_ctrl}` principal components (`r {cumvar_string_ctrl}`% explained variance)."
-```  
-
 ```{r merged_umap_ctrl, eval=has_controls}
 # Run UMAP
 suppressWarnings(future::plan("multiprocess", workers = avail_workers))
@@ -1062,6 +1110,12 @@ if(!all(rownames(umapDF_ctrl) == colnames(normCountsctrl))){
 }
 
 ```   
+</details>  
+<!-- end of details section collapsing multiple no-output code blocks to save space -->  
+
+```{r eval=has_controls, results="asis"}
+cat(sprintf("Batch Control UMAP using %s principal components (%s%% explained variance).",nPC_ctrl,cumvar_string_ctrl))
+```  
 
 ```{r umap_quality_ctrl,  results = "asis", fig.height = 20, fig.width = 20, class.output = "superbigimage", eval=has_controls}
 stm("Plotting Control UMAP by Data Quality Metrics")
