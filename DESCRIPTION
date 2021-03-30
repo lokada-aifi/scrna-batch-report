@@ -29,7 +29,6 @@ Imports:
   HTOparser (>= 1.0.12),
   parallel,
   rhdf5,
-  Seurat,
   jsonlite,
   Matrix,
   magrittr,
