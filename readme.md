@@ -133,7 +133,6 @@ PB7626W6,Sample,B001,HT12,B001-P1,C1W1;C1W2;C1W3;C1W4;C1W5;C1W6;C1W7;C1W8;C2W1;C
 PB7626W7,Sample,B001,HT13,B001-P1,C1W1;C1W2;C1W3;C1W4;C1W5;C1W6;C1W7;C1W8;C2W1;C2W2;C2W3;C2W4;C2W5
 IMM19-711,Control,B001,HT14,B001-P1,C1W1;C1W2;C1W3;C1W4;C1W5;C1W6;C1W7;C1W8;C2W1;C2W2;C2W3;C2W4;C2W5
 ```
-<a id="batch_report_param"></a>
 
 Sample sheets should be provided for each dataset. When running script without a **Sample Sheet**, for testing purposes, the -k parameter is omitted and the script uses an example file provided in `batchreporter`.  
 
@@ -157,7 +156,7 @@ Rscript --vanilla \
 
 [Return to Contents](#contents)
 
-<a id="batch_report_out"></a>
+<a id="scrna_report_out"></a>
 
 #### Output Files
 
@@ -170,7 +169,7 @@ B026_20210317.html
 
 [Return to Contents](#contents)
 
-<a id="batch_report_test"></a>
+<a id="scrna_report_test"></a>
 
 #### Tests
 
