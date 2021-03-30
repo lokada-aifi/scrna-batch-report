@@ -22,18 +22,18 @@ R functions and scripts for summarizing and performing batch-level QC on AIFI se
 
 <a id="dependencies"></a>
 
-## Dependencies  
-## NEEDS UPDATE   
+## Dependencies    
 
 This repository requires that `pandoc` and `libhdf5-devel` libraries are installed as dependencies of the `H5weaver` functions:
 ```
 sudo apt-get install pandoc libhdf5-devel
 ```
 
-It also depends on the `H5weaver`, `HTOparser`,`jsonlite`, `rmarkdown`, `optparse`, `gt`,  libraries.
+It also depends on the internal AIFI `H5weaver` and `HTOparser` packages. Additional CRAN packages needed to run reports can be found in the `Description` file.
 
-`jsonlite`, `rmarkdown`, `optparse` are available from CRAN, and can be installed in R using:
+CRAN packages can be installed in R using:
 ```
+# Example
 install.packages("jsonlite")
 install.packages("rmarkdown")
 install.packages("optparse")
@@ -51,7 +51,7 @@ devtools::install_github("aifimmunology/H5weaver")
 <a id="installation"></a>
 
 ## Installation
-`batchreporter` is an R package with associated executable scripts. First install the R package from the AIFImmunology Github repository:
+`batchreporter` is an R package with associated executable scripts. First install dependencies. Then install the R package from the AIFImmunology Github repository:
 
 ```
 Sys.setenv(GITHUB_PAT = "[your_PAT_here]")
