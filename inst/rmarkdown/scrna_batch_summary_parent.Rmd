@@ -15,7 +15,7 @@ params:
   in_config: NULL 
   out_dir: NULL
   n_cores: NULL
-  mc_mb_limit: 5000
+  mc_mb_limit: 50000
 ---
 
 <!-- create details section to collapse multiple no-output code blocks to save space -->
@@ -597,7 +597,8 @@ g6 <- plot_umap_report(df = umapDF,
                  point_size = point_size,
                  color_col = "well_id",
                  scale_color_fun = scale_color_well
-)
+) +
+  guides(colour = guide_legend(override.aes = list(size = 3)))
 
 # Sample
 stm("Plotting Sample ID UMAP")
@@ -615,7 +616,8 @@ g7 <- plot_umap_report(df = umapDF,
                  point_size = point_size,
                  color_col = sample_column_name,
                  scale_color_fun = scale_color_sample
-)
+) +
+  guides(colour = guide_legend(override.aes = list(size = 3)))
 
 
 aligned_plots <- cowplot::align_plots(g3, g4, g5, g6, g7, align = "hv", axis = "tblr")  # uniform plot sizing
@@ -838,13 +840,6 @@ label_scores_mito <- function(umapDF, cell_label_column_name,
   summary_merge <- rbind(summary_all, summary_split) %>%
     mutate(cell_label = factor(get(cell_label_column_name), levels = label_order))
 
-  # ggplot(summary_merge, aes(factor(cell_label, levels = label_order), pct, fill = group))+
-  #   geom_bar(stat = "identity", position = "dodge") +
-  #   xlab("Cell Type Label") +
-  #   ylab("Percent Cell Type within Group") +
-  #   theme(text = element_text(size = 24),
-  #         axis.text.x = element_text(angle = 90))
-  
   ggplot(summary_merge, aes(group, pct, fill = factor(cell_label, levels = label_order))) +
     geom_bar(stat = "identity", position = "stack") +
     xlab("Cell Type Label") +
@@ -971,18 +966,6 @@ qc_aligned_barplot(meta=all_control, category_x = "cell_label_fmt", name_x = "Ce
 qc_stacked_barplot(meta=all_control, category_x = "pool_id", name_x = "Pool ID",
                    category_y = "cell_label_fmt", name_y = "Percent Cells", 
                    colorset_y = "rainbow", category_name = "Cell Label",as_fraction = TRUE)
-
-# g <- ggplot(ctrl_by_type, aes(cell_label_column_name, y = pct)) +
-#   geom_bar(aes(fill = control_type), position = "dodge", stat = "identity")  +
-#   ggtitle("Percent Cells by Label") + 
-#   ylab("Percent All Cells") +
-#   xlab("\n\n\n\n\n\nCell Label") +
-#   theme_bw()+
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-#         axis.title.x = element_text(margin = margin(20,0,0,0))) 
-# ggplotly(g) %>% 
-#   layout(hovermode = "compare")%>% layout(legend = list(x = 0.8, y = 0.9))
-
 
 ```  
 
