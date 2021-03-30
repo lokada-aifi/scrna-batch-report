@@ -32,7 +32,8 @@ Imports:
   jsonlite,
   Matrix,
   magrittr,
-  rlang
+  rlang,
+  Seurat
 Suggests: 
   testthat
 LazyData: true
