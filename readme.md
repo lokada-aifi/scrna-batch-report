@@ -14,7 +14,7 @@ R functions and scripts for summarizing and performing batch-level QC on AIFI se
 
 #### [Running Reports](#batch_report)
 
-#### [Summarizing Batch: run_scrna_batch_summary.R](#scrna_batch_report)
+#### [scRNA Cell Hashing Batch Report](#scrna_batch_report)
 - [Parameters](#scrna_report_param)
 - [Sample Sheet Guidelines](#scrna_sample_sheet)
 - [Outputs](#scrna_report_out)
