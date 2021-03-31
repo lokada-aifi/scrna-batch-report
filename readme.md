@@ -102,8 +102,8 @@ There are 9 parameters for this script:
 * `-t or --in_batch_meta`: A .json file of key value pairs describing relevant reference datasets and software versions used in the analysis pipeline processing of the batch. If provided, all values will be echoed as a flat table on report. 
 * `-n or --n_cores`: An integer value of number of cores to use for multithreaded processes, used by Seurat functions  
 * `-m or --mc_mb_limit`: An integer value of number of maximum size in Mb allowed for exporting globals to each worker in multicore processing (for futures R package). Defaults to 50000, suggest >= 20000.  
-* `-d or --out_dir`: A directory path to use to output the batch report  
-* `-o or --out_html`: A filename to use to output the HTML summary report file  
+* `-d or --out_dir`: A directory path to use to output the batch report.
+* `-o or --out_html`: A filename to use to output the HTML summary report file. For example "B001_scRNA_batch_report.html"
 
 Test runs may be performed by supplying only the -b and -o arguments, as seen in test [below](#batch_report_test). 
 
