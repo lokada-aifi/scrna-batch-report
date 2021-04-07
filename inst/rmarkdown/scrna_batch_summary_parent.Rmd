@@ -829,7 +829,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 #### Cell Types by Fraction Mitochondrial UMI Group  
 
-```{r celltype_piechart_bymito_group, fig.width = 8, fig.height = 3.5}
+```{r celltype_piechart_bymito_group, fig.width = 8, fig.height = 3.8}
 stm("Plotting cell type umi picharts by fraction mitochondrial umi group")
 
 # create df with mt groups + all cells
@@ -855,8 +855,8 @@ g_pie1 <- qc_piechart(meta = mito_plot,
        stat = "identity", 
        variable_y_identity = "N",
        palette_df_group = cell_type_palette,
-       label_size = 3, 
-       plot_font_size = 16,
+       label_size = 2, 
+       plot_font_size = 14,
        nudge_x_label = 0.2,
        facet_formula = as.formula("~group")) +
   theme(legend.position = "bottom")
@@ -873,23 +873,24 @@ g_pie1
 
 ```{r mito_group_piechart_bycelltype, results = "asis"}
 stm("Plotting fraction mitochondrial umi picharts by cell type")
-ncol_plot <- 4
+ncol_plot <- 5
 g_pie_cells <- qc_piechart(meta = mito_groups, 
        category_y = "group", 
        category_name = "Fraction Mitochondrial UMI", 
        stat = "count", 
        colorset_y = "varibow",
        label_size = 3, 
-       plot_font_size = 14,
+       plot_font_size = 12,
        nudge_x_label = 0.2,
        facet_formula = as.formula("~facet_group"), ncol = ncol_plot) +
   theme(legend.position = "bottom")
 
-temp_fig_width <- 8
+temp_fig_width <- 14
 n_cell_type_levels <- nrow(cell_type_palette)
-temp_fig_height <- ceiling(n_cell_type_levels/ncol_plot)*1.5 + 0.25
+temp_fig_height <- ceiling(n_cell_type_levels/ncol_plot)*2 + 0.25
 
-make_subchunk(g_pie_cells, subchunk_name = "mito_group_piechart_bycelltype_subchunk", quiet_knit = T, chunk_opt_list = list(fig.width = temp_fig_width, fig.height = temp_fig_height, class.output = "superbigimage"))
+make_subchunk(g_pie_cells, subchunk_name = "mito_group_piechart_bycelltype_subchunk", quiet_knit = T, 
+              chunk_opt_list = list(fig.width = temp_fig_width, fig.height = temp_fig_height, class.output = "superbigimage"))
 ```  
 
 [Return to Top](#top_cell_labeling)  
