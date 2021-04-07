@@ -33,7 +33,8 @@ Imports:
   Matrix,
   magrittr,
   rlang,
-  Seurat
+  Seurat,
+  ggrepel
 Suggests: 
   testthat
 LazyData: true

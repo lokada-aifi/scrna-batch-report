@@ -6,7 +6,7 @@ scrna_quality,fraction of mitochondrial umi threshold for qc plots,fct_mito_umi_
 scrna_labeling,genes of interest to plot on umaps in labeling section,genes_plot,character,CD3D;CD3E;CD3G;CD247;CD4;CD8A;HLA-DRA;CD14;FCGR3A;IL3RA;ITGAX;CD19;MS4A1;CD79A;NCAM1;NKG7;PPBP;IL7R;FUT4;ITGAM;FCGR2B;FCER1A,
 scrna_labeling,cell cycle S phase genes for determining s phase score/cell cycle label,s.genes,character,MCM5;PCNA;TYMS;FEN1;MCM7;MCM4;RRM1;UNG;GINS2;MCM6;CDCA7;DTL;PRIM1;UHRF1;CENPU;HELLS;RFC2;POLR1B;NASP;RAD51AP1;GMNN;WDR76;SLBP;CCNE2;UBR7;POLD3;MSH2;ATAD2;RAD51;RRM2;CDC45;CDC6;EXO1;TIPIN;DSCC1;BLM;CASP8AP2;USP1;CLSPN;POLA1;CHAF1B;MRPL36;E2F8,s genes from Seurat (Seurat::cc.genes.updated.2019$s.genes)
 scrna_labeling,cell cycle G2/M phase genes for determining s phase score/cell cycle label,g2m.genes,character,HMGB2;CDK1;NUSAP1;UBE2C;BIRC5;TPX2;TOP2A;NDC80;CKS2;NUF2;CKS1B;MKI67;TMPO;CENPF;TACC3;PIMREG;SMC4;CCNB2;CKAP2L;CKAP2;AURKB;BUB1;KIF11;ANP32E;TUBB4B;GTSE1;KIF20B;HJURP;CDCA3;JPT1;CDC20;TTK;CDC25C;KIF2C;RANGAP1;NCAPD2;DLGAP5;CDCA2;CDCA8;ECT2;KIF23;HMMR;AURKA;PSRC1;ANLN;LBR;CKAP5;CENPE;CTCF;NEK2;G2E3;GAS2L3;CBX5;CENPA,g2m genes from Seurat (Seurat::cc.genes.updated.2019$g2m.genes)
-scrna_labeling,labelling method used,cell_label_method,character,Seurat3,
+scrna_labeling,labelling method used,cell_label_method,character,Seurat,
 scrna_labeling,labeling reference,cell_label_reference,character,variable_pbmc_10k_v3,
 scrna_labeling,name of column of cell type labels in metadata,cell_label_column_name,character,seurat_pbmc_type,
 scrna_labeling,name of column of cell type label scores in metadata,cell_label_score_column_name,character,seurat_pbmc_type_score,

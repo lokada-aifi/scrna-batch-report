@@ -579,6 +579,10 @@ make_subchunk(g, subchunk_name = "hto_cat_fraction_subchunk",
 <a id="well_singlet_summary"></a>
 
 ##### Well-Based Summary  
+
+<details>  
+  <summary>Expand data table of summary stats by well </summary>  
+  
 ```{r scrna_hash_well_summary}
 well_summary <- all_meta[ ,.(n_cells = .N,
                              median_reads = median(n_reads),
@@ -593,29 +597,14 @@ qc_table(well_summary)
 
 [Return to Top](#top_cell_hashing) 
 
+</details> 
+
 <a id="hto_barcode_well"></a>
 
 ##### HTO Barcode Count per Well Plot  
 
 ```{r hto_counts_well, class.output = "superbigimage", results="asis"}
 stm("Plotting barcode count per well and hto")
-
-# plot_list <- list()
-# for (i in seq_along(pools)){
-#   plot_list[[i]] <- qc_aligned_barplot_facet(meta = meta[meta$pool_id == pools[i]],
-#                    category_x = "well_id",
-#                    name_x = "Well ID",
-#                    category_y = "sample_hto_pool",
-#                    category_name = "HTO/Sample",
-#                    colorset_y = "varibow",
-#                    name_y = "Number of Cells",
-#                    padding = 0.2,
-#                    facet_formula = formula("~pool_id"), nrow = 1, scales = "free_y", drop = TRUE) +
-#   ggtitle(pools[i])
-# 
-# }
-# 
-# g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 
 g <- qc_aligned_barplot_facet(meta = meta,
                    category_x = "well_id",
@@ -645,23 +634,6 @@ batchreporter::make_subchunk(g, subchunk_name = "hto_cat_count_subchunk",
 
 ```{r hto_fraction_well, class.output = "superbigimage", results="asis"}
 stm("Plotting barcode fraction per well and hto")
-
-# plot_list <- list()
-# for (i in seq_along(pools)){
-#   plot_list[[i]] <- qc_stacked_barplot_facet(meta = meta[pool_id==pools[i]],
-#                    category_x = "well_id",
-#                    name_x = "Well ID",
-#                    category_y = "sample_hto_pool",
-#                    category_name = "HTO/Sample",
-#                    colorset_y = "varibow",
-#                    name_y = "Fraction of Cells",
-#                    as_fraction = TRUE, 
-#                    facet_formula = formula("~pool_id"), nrow = 1, scales = "free_x") +
-#   ggtitle("HTO Barcode Fraction per Well")+
-#     theme(text = element_text(size = 12))
-# }
-# 
-# g <- cowplot::plot_grid(plotlist = plot_list, nrow = 1)
 
 g <- qc_stacked_barplot_facet(meta = meta,
                    category_x = "well_id",
@@ -916,6 +888,10 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "genes_well_hto_subchunk",
 <a id="hto_singlet_summary"></a>
 
 ##### Hash-Based Summary  
+
+<details>  
+  <summary>Expand data table of summary stats by hash tag </summary>  
+  
 ```{r hash_singlet_summary}
 stm("Output pool based summary table")
 hto_singlet_summary <- meta[ ,.(n_singlet_cells = .N,
@@ -933,6 +909,8 @@ qc_table(hto_singlet_summary)
 ```  
   
 [Return to Top](#top_cell_hashing)  
+
+</details>  
 
 <a id="well_hto_barcode"></a> 
 

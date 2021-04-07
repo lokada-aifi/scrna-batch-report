@@ -5,3 +5,5 @@
 ^testing_code$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+[.]ipynb_checkpoints$
+[.]hisefilelog[.]rds$

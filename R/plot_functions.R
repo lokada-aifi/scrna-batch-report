@@ -585,7 +585,7 @@ seurat_3_cell_palette <- function(){
 #' @param cell_label_method Character value. Cell labeling method. Currently only
 #' defined method is Seurat3.
 #' @param cell_labels Character vector. All cell type labels in the dataset.
-#' @return
+#' @return Dataframe of cell types and corresponding colors.
 #' @export
 #' @examples
 #' get_cell_label_palette(cell_label_method = "Seurat3")
@@ -606,4 +606,212 @@ get_cell_label_palette <- function(cell_label_method = "Seurat3", cell_labels=NU
                            stringsAsFactors = FALSE)
     df_pal
   }
+}
+
+#' QC Pie Chart with Optional Faceting
+#'
+#' Create a pie chart with wedges specified by a grouping variable. Faceting may be performed
+#' if facetting is provided. 
+#'
+#' The grouping variable used for category_y will generate the wedges of the bar plot. The supplied
+#' dataframe can either be one observation per row or one row per category_y. If the former, "stat" should be 
+#' "count", in which case counts of each category will be calculated. If the latter, "stat" should be
+#' "identity", and a column containing the category counts should be supplied ("variable_y_identity"). 
+#' Facet wrapping will be performed on supplied variables based on the facet_formula. 
+#'
+#' @param meta A data.frame containing metadata
+#' @param category_y  A character value specifying the metadata column to use for color groups
+#' @param category_name A character value specifying a name to display for the category colors
+#' @param stat A character value, either "count" or "identity", depending on whether input data
+#' has already been aggregated by the category_y grouping variable. Default is "count".
+#' @param palette_df_group An optional data frame containing two columns defining the 
+#' categorical data color palette. The first column contains label values for 
+#' all levels of category_y and the second column contains the color for each 
+#' label. If NULL (default) random colors will be generated via the colorset_y
+#' parameter.
+#' @param colorset_y A colorset to use as fills for category_y. Currently 
+#' supported: "rainbow" or "varibow". Default is "varibow". Only used when
+#' palette_df_group is NULL.
+#' @param variable_y_identity Value to use as labels for the pie wedge. Currently supported
+#' values are "p
+#' @param plot_font_size Numeric value. General size of text on plot in font size. Default is 14.
+#' @param label_size Size of text to label each pie wedge. Default is 3
+#' @param text_repel_x Numeric value. X coordinate for plotting pie wedge labels 
+#' using \code{ggrepel::geom_text_repel()}. Default is 1.5
+#' @param nudge_x_label Numeric value. Distance to nudge label in X coordinate 
+#' for plotting pie wedge labels using \code{ggrepel::geom_text_repel()}. Higher
+#' values will increase line length. Default is 0.5.
+#' @param facet_formula A formula object for faceting based on variables in the meta data frame. 
+#' For example, \code{formula("~pool_id")} will facet wrap by a variable called pool_id in meta. 
+#' Currently only actual column names (rather than variables) supported for this argument.
+#' @param ... Additional arguments passed to \code{ggplot2::facet_wrap()}
+#' @return A ggplot2 plot object
+#' @import data.table
+#' @import ggplot2
+#' @importFrom ggrepel geom_text_repel
+#' @export
+#' @examples 
+#' \dontrun{
+#' set.seed(2021)
+#' my_palette <- batchreporter::get_cell_label_palette()
+#' cell_probs <- c(0.025, 0.20, 0.03, 0.192, 0.18, 0.14, 0.05,
+#'                 0.005, 0.02, 0.1 ,0.001,0.008,0.049)
+#' test_data_1 <- data.frame(cell_type = sample(my_palette[,1], 500, 
+#'                                              prob = cell_probs, replace = TRUE),
+#'                         group = sample(c("MT UMI>0.1", "MT UMI<0.1"), 500, 
+#'                                        prob = c(0.1, 0.9), replace = TRUE),
+#'                         sample_names= 1:500)
+#' # Use a predefined palette
+#' qc_piechart(test_data_1,
+#'             category_y = "cell_type", 
+#'             category_name = "Cell Type",
+#'             stat = "count",
+#'             palette_df_group = my_palette,
+#'             plot_font_size = 14,
+#'             label_size = 3,
+#'             text_repel_x = 1.5, 
+#'             nudge_x_label = 0.2,
+#'             facet_formula = as.formula("~group"))
+#' # Use default random palette
+#' qc_piechart(test_data_1,
+#'             category_y = "cell_type",
+#'             stat = "count",
+#'             label_size = 3,
+#'             text_repel_x = 1.5, 
+#'             nudge_x_label = 0.2,
+#'             facet_formula = as.formula("~group"))
+#' 
+#' # No Facetting
+#' qc_piechart(test_data_1,
+#'             category_y = "cell_type",
+#'             stat = "count",
+#'             label_size = 3,
+#'             text_repel_x = 1.5, 
+#'             nudge_x_label = 0.2)
+#'
+#' # Stat = "identity" version, precalculated counts
+#' test_data_2 <- data.frame(cell_type = rep(my_palette[,1], times = 2),
+#'                          group = rep(c("MT UMI>0.1", "MT UMI<0.1"), each = nrow(my_palette)),
+#'                          sample_names= 1:(2*nrow(my_palette)),
+#'                          group_count = c(round(1000*cell_probs),round(4000*sample(cell_probs))))
+#' test_data_2
+#' qc_piechart(test_data_2,
+#'             category_y = "cell_type",
+#'             stat = "identity",
+#'             variable_y_identity = "group_count",
+#'             label_size = 3,
+#'             text_repel_x = 1.5, 
+#'             nudge_x_label = 0.2,
+#'             facet_formula = as.formula("~group"))
+#' } # end don't run
+
+
+qc_piechart <- function(meta, 
+                         category_y,
+                         category_name = "Cell Type", 
+                         stat = "count",
+                         variable_y_identity = NULL,
+                         palette_df_group = NULL, 
+                         colorset_y = "varibow",
+                         plot_font_size = 14, 
+                         label_size = 3,
+                         text_repel_x = 1.5,
+                         nudge_x_label = 0.5,
+                         facet_formula = NULL, ...) {
+  
+  assertthat::assert_that(sum(class(meta) %in% c("data.frame",
+                                                 "data.table")) > 0)
+  assertthat::assert_that(class(category_y) == "character")
+  assertthat::assert_that(length(category_y) == 1)
+  assertthat::assert_that(category_y %in% names(meta))
+  assertthat::assert_that(class(category_name) == "character")
+  assertthat::assert_that(length(category_name) == 1)
+  assertthat::assert_that(ifelse(!is.null(palette_df_group),
+                                 all(unlist(meta[,category_y]) %in% palette_df_group[,1]),
+                                 TRUE), 
+                          msg = "Supplied color palette must contain all levels of category variable.")
+  assertthat::assert_that(class(colorset_y) == "character")
+  assertthat::assert_that(length(colorset_y) == 1)
+  assertthat::assert_that(colorset_y %in% c("rainbow", "varibow"))
+  assertthat::assert_that(length(stat) == 1)
+  assertthat::assert_that(class(stat) == "character")
+  assertthat::assert_that(stat %in% c("count", "identity"), msg = "parameter stat must be 'count' or 'identity'")
+  assertthat::assert_that(ifelse(stat == "identity", length(variable_y_identity) ==
+                                   1, TRUE), msg = "If stat is 'identity', variable_y_identity must be supplied")
+  assertthat::assert_that(ifelse(stat == "identity", class(variable_y_identity) ==
+                                   "character", TRUE))
+  assertthat::assert_that(ifelse(stat == "identity", variable_y_identity %in% names(meta), TRUE))
+  assertthat::assert_that(is.null(facet_formula) || 
+                            class(facet_formula) == "formula")
+  meta <- as.data.table(meta)
+  
+  # Format and calculate count table using relevant grouping variables and values
+  if (!is.null(facet_formula)) {
+    f_list <- as.character(as.list(facet_formula))
+    f_cols <- setdiff(f_list, c("`~`", "[.]", "+"))
+    f_cols <- trimws(unlist(strsplit(f_cols, split = "\\+")))
+    assertthat::assert_that(all(f_cols %in% names(meta)), 
+                            msg = "Columns in facet formula must be present in input meta object")
+    if (stat == "count") {
+      count_table <- meta[, .(counts = nrow(.SD)), by = mget(c(category_y, f_cols))]
+    }
+    else if (stat == "identity") {
+      count_table <- meta[, mget(c(category_y, f_cols, variable_y_identity))]
+      count_table[, `:=`(counts, get(variable_y_identity))]
+    }
+    count_table[, `:=`(pct = counts/sum(counts)) , by = mget(c(f_cols))]
+    count_table <- count_table[base::order(count_table[, ..category_y], decreasing = TRUE),]
+    count_table[, `:=`(ypos =  cumsum(pct)- 0.5*pct) , by = mget(c(f_cols))]
+  }
+  else {
+    if (stat == "count") {
+      count_table <- meta[, .(counts = nrow(.SD)), by = mget(category_y)]
+    }
+    else if (stat == "identity") {
+      count_table <- meta[, mget(c(category_y, variable_y_identity))]
+      count_table[, `:=`(counts, get(variable_y_identity))]
+    }
+    count_table[, `:=`(pct = counts/sum(counts))]
+    count_table <- count_table[base::order(count_table[, ..category_y], decreasing = TRUE),]
+    count_table[, `:=`(ypos =  cumsum(pct)- 0.5*pct) ]
+    
+  }
+  
+  # Color palette
+  if(!is.null(palette_df_group)){
+    plot_fills <- palette_df_group
+    names(plot_fills) <- c(category_y, "fill")
+  } else {
+    plot_fills <- data.frame(unique(count_table[[category_y]]))
+    names(plot_fills) <- category_y
+    if (colorset_y == "rainbow") {
+      set.seed(3030)
+      plot_fills$fill <- sample(grDevices::rainbow(nrow(plot_fills)), 
+                                nrow(plot_fills))
+    }
+    else if (colorset_y == "varibow") {
+      set.seed(3030)
+      plot_fills$fill <- sample(H5weaver::varibow(nrow(plot_fills)), 
+                                nrow(plot_fills))
+    }
+    plot_fills <- plot_fills[order(plot_fills[[category_y]]), ]
+  }
+  
+  # Plot
+  p <- ggplot(count_table, aes(x = 1, y=pct, fill=!!rlang::parse_expr(category_y))) +
+    geom_bar(stat="identity", width = 1, color="white") +
+    coord_polar("y", start = 0) +
+    scale_fill_manual(name = category_name, values = plot_fills$fill, breaks = plot_fills[,category_y]) +
+    ggrepel::geom_text_repel(aes(label = !!rlang::parse_expr(category_y), x=text_repel_x, y = ypos), 
+                    color = "black", size = label_size, segment.size = 0.4, nudge_x = nudge_x_label,
+                    show.legend = TRUE) +
+    theme_void() + 
+    theme(text = element_text(size = plot_font_size), 
+          strip.text = element_text(face = "bold"))
+  
+  if (!is.null(facet_formula)) {
+    p <- p + facet_wrap(facet_formula, ...)
+  }
+  
+  return(p)
 }

@@ -82,6 +82,10 @@ if(is.null(params$in_dir)) {
   rna_in_dir <- params$in_dir
   in_key <- params$in_key
   in_config <- params$in_config
+  if(is.null(in_config)){
+      in_config <- system.file("extdata/default_rna_config_v1.csv", package = "batchreporter")
+      stm("No config file provided. Using default_rna_config_v1.csv for pbmc data")
+  }
   out_dir <- params$out_dir
   in_batch_meta <- params$in_batch_meta
   if(is.null(in_batch_meta)){in_batch_meta <- NA}
@@ -645,6 +649,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 ##### [UMAP All Cells](#umap_all_cells)
 ##### [UMAP by Fraction Mitochondrial UMI](#umap_fct_mito_umi)
 ##### [Cell Type by Fraction Mitochondrial UMI](#celltype_fct_mito_umi)
+##### [Fraction Mitochondrial UMI by Cell Type](#group_fct_mito_umi_bycelltype)
 ##### [Marker Visualization](#marker_visualization)
 
 <a id="labeling_scores"></a>
@@ -690,7 +695,7 @@ ggplot(meta, aes(get(cell_label_score_column_name), fill = get(cell_label_column
 
 Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) selected by jackstraw.
 
-```{r umap_labels,  esults = "asis", fig.height = 18, fig.width = 20, class.output = "superbigimage"}
+```{r umap_labels,  results = "asis", fig.height = 12, fig.width = 20, class.output = "superbigimage"}
 point_size <- 0.2
 
 # Cell Types
@@ -724,7 +729,6 @@ g2 <- g_base +
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
 
-# Cell Cycle Scores
 stm("Plotting G1 Cell Cycle Category UMAP")
 g3  <- ggplot(umapDF %>% dplyr::filter(Phase == "G1"), aes(UMAP_1_merged, UMAP_2_merged))  +
   geom_point(alpha = 0.3, size = point_size, color = "blue") +
@@ -752,17 +756,29 @@ g5  <- ggplot(umapDF %>% dplyr::filter(Phase == "G2M"), aes(UMAP_1_merged, UMAP_
         title = element_text(size = 20),
         legend.text = element_text(size = 14))
 
-
 aligned_plots <- cowplot::align_plots(g1, g2, g3, g4, g5, align = "hv", axis = "tblr")  # uniform plot sizing
 
+```  
+
+```{r umap_labels_output,  results = "asis", fig.height = 6, fig.width = 20, class.output = "superbigimage"}
 cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[2]],
-                   aligned_plots[[3]],
+                   ncol = 2)
+
+```  
+
+<details>
+    <summary> Expand Cell Cycle UMAP plots </summary>
+
+```{r umap_cell_cycle,  results = "asis", fig.height = 12, fig.width = 20, class.output = "superbigimage"}
+
+cowplot::plot_grid(aligned_plots[[3]],
                    aligned_plots[[4]],
                    aligned_plots[[5]],
                    ncol = 2)
 
-```
+```  
+</details>
 
 [Return to Top](#top_cell_labeling)  
 
@@ -811,47 +827,69 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 <a id="celltype_fct_mito_umi"></a>  
 
-#### Cell Types by Fraction Mitochondrial Read Group
-```{r cell_labeling_mito_celltypes, fig.height = 10, fig.width = 20}
-stm("Plotting Batch UMAP labeling scores, by fraction mitochondrial reads")
+#### Cell Types by Fraction Mitochondrial UMI Group  
 
-label_scores_mito <- function(umapDF, cell_label_column_name,
-                              mito_binary = "fct_mito_umi_binary"
-                              ){
-  summary_all <- umapDF %>%
-    group_by(!!rlang::parse_expr(cell_label_column_name)) %>%
+```{r celltype_piechart_bymito_group, fig.width = 8, fig.height = 3.5}
+# create df with mt groups + all cells
+mito_all <- umapDF %>%
+    select(barcodes, all_of(cell_label_column_name),fct_mito_umi_binary) %>%
+    mutate(group = "All cells") %>%
+    mutate(facet_group = get(cell_label_column_name))
+mito_groups <- umapDF %>%
+    select(barcodes, all_of(cell_label_column_name),fct_mito_umi_binary) %>%
+    mutate(group = paste0("FractionMT",fct_mito_umi_binary)) %>%
+    mutate(facet_group = get(cell_label_column_name))
+mito_plot <- rbind(mito_all, mito_groups) %>%
+    group_by(group, !!rlang::parse_expr(cell_label_column_name)) %>%
     summarize(N = n(), .groups = "drop") %>%
     ungroup() %>%
-    mutate(pct = N/sum(N)*100) %>%
-    mutate(group = "All cells")
- 
-  label_order <- names(sort(table(summary_all[,cell_label_column_name]), decreasing = TRUE))
-
-  summary_split <- umapDF %>%
-    group_by(!!rlang::parse_expr(cell_label_column_name), !!rlang::parse_expr(mito_binary)) %>%
-    summarize(N = n(), .groups = "drop") %>%
-    ungroup() %>%
-    group_by(!!rlang::parse_expr(mito_binary)) %>%
-    mutate(pct = N/sum(N)*100 ) %>%
-    rename(group = !!mito_binary) %>%
-    mutate(group = paste0("FractionMT",group)) %>% 
+    group_by(group) %>%
+    mutate(Pct = N/sum(N)*100) %>%
     ungroup()
 
-  summary_merge <- rbind(summary_all, summary_split) %>%
-    mutate(cell_label = factor(get(cell_label_column_name), levels = label_order))
+g_pie1 <- qc_piechart(meta = mito_plot, 
+       category_y = cell_label_column_name, 
+       category_name = "Cell Type", 
+       stat = "identity", 
+       variable_y_identity = "N",
+       palette_df_group = cell_type_palette,
+       label_size = 3, 
+       plot_font_size = 16,
+       nudge_x_label = 0.2,
+       facet_formula = as.formula("~group")) +
+  theme(legend.position = "bottom")
 
-  ggplot(summary_merge, aes(group, pct, fill = factor(cell_label, levels = label_order))) +
-    geom_bar(stat = "identity", position = "stack") +
-    xlab("Cell Type Label") +
-    ylab("Percent Cell Type within Group") +
-    scale_fill_manual(name = "Cell Type", values = cell_type_palette$cell_color, breaks = cell_type_palette$cell_labels)+
-    theme(text = element_text(size = 24))
+g_pie1
+
+```    
+
+[Return to Top](#top_cell_labeling)  
   
-}
+<a id="group_fct_mito_umi_bycelltype"></a> 
+  
+#### Fraction Mitochondrial UMI Group by Cell Types  
 
-label_scores_mito(umapDF, cell_label_column_name)
+```{r mito_group_piechart_bycelltype, results = "asis"}
+ncol_plot <- 4
+g_pie_cells <- qc_piechart(meta = mito_groups, 
+       category_y = "group", 
+       category_name = "Fraction Mitochondrial UMI", 
+       stat = "count", 
+       colorset_y = "varibow",
+       label_size = 3, 
+       plot_font_size = 14,
+       nudge_x_label = 0.2,
+       facet_formula = as.formula("~facet_group"), ncol = ncol_plot) +
+  theme(legend.position = "bottom")
 
-```
+temp_fig_width <- 8
+n_cell_type_levels <- nrow(cell_type_palette)
+temp_fig_height <- ceiling(n_cell_type_levels/ncol_plot)*1.5 + 0.25
+
+make_subchunk(g_pie_cells, subchunk_name = "mito_group_piechart_bycelltype_subchunk", quiet_knit = T, chunk_opt_list = list(fig.width = temp_fig_width, fig.height = temp_fig_height, class.output = "superbigimage"))
+```  
+
+[Return to Top](#top_cell_labeling)  
 
 <a id="marker_visualization"></a>   
 
@@ -923,7 +961,10 @@ Comparing batch bridging control to previous reference batches.
 
 ```{r control_summary, eval=has_controls}
 all_control <- all_control %>% 
-  mutate(control_type = ifelse(batch_id == batch, "new", "reference")) 
+  mutate(control_type = ifelse(batch_id == batch, "new", "reference")) %>%
+  group_by(control_type) %>%
+  mutate(control_batch = paste(batch_id, collapse = ";")) %>%
+  ungroup()
 
 
 ```  
@@ -1110,7 +1151,7 @@ max_umi <- max(60000,all_control$n_umis)
 point_size <- 0.4
 
 # Cell Types
-g_base <- ggplot(umapDF_ctrl %>% arrange(desc(control_type)), aes(UMAP_1_merged, UMAP_2_merged)) 
+g_base <- ggplot(umapDF_ctrl %>% arrange(desc(control_type)), aes(UMAP_1_merged, UMAP_2_merged)) # the new batch will be plotted on top
 
 
 stm("Plotting cell type UMAP")
@@ -1143,8 +1184,8 @@ g2 <- g_base +
 # Control Type
 stm("Plotting Control type UMAP")
 g3 <- g_base +
-  geom_point(alpha = 1, size = point_size, aes(color = control_type)) +
-  ggtitle("Control Type")+
+  geom_point(alpha = 1, size = point_size, aes(color = control_batch)) +
+  ggtitle("Control Batch")+
   theme_bw()+
   theme(aspect.ratio = 1/1,
         title = element_text(size = 20),
