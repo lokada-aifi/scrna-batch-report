@@ -966,7 +966,7 @@ Comparing batch bridging control to previous reference batches.
 all_control <- all_control %>% 
   mutate(control_type = ifelse(batch_id == batch, "new", "reference")) %>%
   group_by(control_type) %>%
-  mutate(control_batch = paste(batch_id, collapse = ";")) %>%
+  mutate(control_batch = paste(sort(unique(batch_id)), collapse = ";")) %>%
   ungroup()
 
 
@@ -1078,7 +1078,7 @@ ctrl_so <- RunPCA(object = ctrl_so, npcs = pc_dims_ctrl, verbose = FALSE)
 ```{r Jackstraw_ctrl, message = FALSE, eval=has_controls}
 stm("Determining dimensionality via jackstraw method control")
 
-labels_order_ctrl <- all_control[,get(cell_label_column_name)][match(all_control$barcodes, colnames(merged_so))]
+labels_order_ctrl <- all_control[,get(cell_label_column_name)][match(all_control$barcodes, colnames(ctrl_so))]
 # labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
 names(labels_order_ctrl) <- colnames(ctrl_so)
 
