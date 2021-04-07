@@ -830,6 +830,8 @@ cowplot::plot_grid(aligned_plots[[1]],
 #### Cell Types by Fraction Mitochondrial UMI Group  
 
 ```{r celltype_piechart_bymito_group, fig.width = 8, fig.height = 3.5}
+stm("Plotting cell type umi picharts by fraction mitochondrial umi group")
+
 # create df with mt groups + all cells
 mito_all <- umapDF %>%
     select(barcodes, all_of(cell_label_column_name),fct_mito_umi_binary) %>%
@@ -870,6 +872,7 @@ g_pie1
 #### Fraction Mitochondrial UMI Group by Cell Types  
 
 ```{r mito_group_piechart_bycelltype, results = "asis"}
+stm("Plotting fraction mitochondrial umi picharts by cell type")
 ncol_plot <- 4
 g_pie_cells <- qc_piechart(meta = mito_groups, 
        category_y = "group", 
@@ -974,6 +977,7 @@ all_control <- all_control %>%
 #### N Cells per Cell Type
 
 ```{r control_label_counts, eval=has_controls}
+all_control <- setDT(all_control)
 lab_order <- sort(table(all_control[,get(cell_label_column_name)][all_control$control_type=="reference"]), decreasing = TRUE)
 
 # all_control <- all_control %>% 
