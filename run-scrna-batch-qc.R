@@ -67,6 +67,10 @@ if(!dir.exists(args$out_dir)) {
 
 rmd_path <- "scrna_batch_summary_parent.Rmd"
 
+    
+file.exists(system.file("rmarkdown/scrna_batch_summary_parent.Rmd", package = "batchreporter"))
+
+
 file.copy(system.file("rmarkdown/scrna_batch_summary_parent.Rmd", package = "batchreporter"),
           rmd_path,
           overwrite = TRUE)

@@ -33,7 +33,7 @@ RUN R -e 'install.packages(c("jsonlite","rmarkdown","optparse"))'
 ## Install AIFI Github packages
 COPY auth_token /tmp/auth_token
 RUN export GITHUB_PAT=$(cat /tmp/auth_token) \
-   && R -e 'devtools::install_github("aifimmunology/immutils", auth_token = Sys.getenv("GITHUB_PAT")); devtools::install_github("aifimmunology/H5weaver", auth_token = Sys.getenv("GITHUB_PAT")); devtools::install_github("aifimmunology/HTOParser", auth_token = Sys.getenv("GITHUB_PAT"))' \
+   && R -e   'devtools::install_github("aifimmunology/immutils", auth_token = Sys.getenv("GITHUB_PAT")); devtools::install_github("aifimmunology/H5weaver", auth_token = Sys.getenv("GITHUB_PAT")); devtools::install_github("aifimmunology/batchreporter", auth_token = Sys.getenv("GITHUB_PAT"));  devtools::install_github("aifimmunology/HTOParser", auth_token = Sys.getenv("GITHUB_PAT"))' \
   && git  clone  https://aifi-gitops:$GITHUB_PAT@github.com/aifimmunology/batchreporter.git \
   && rm -rf /tmp/downloaded_packages /tmp/*.rds /tmp/auth_token
 
