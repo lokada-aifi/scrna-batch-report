@@ -61,9 +61,11 @@ if(!dir.exists(args$out_dir)) {
   dir.create(args$out_dir)
 }
 
-rmd_path <- file.path(args$out_dir,
-                      paste0(args$batch_id,
-                             "_scrna_batch_summary_parent.Rmd"))
+# rmd_path <- file.path(args$out_dir,
+#                       paste0(args$batch_id,
+#                              "_scrna_batch_summary_parent.Rmd"))
+
+rmd_path <- "scrna_batch_summary_parent.Rmd"
 
 file.copy(system.file("rmarkdown/scrna_batch_summary_parent.Rmd", package = "batchreporter"),
           rmd_path,
