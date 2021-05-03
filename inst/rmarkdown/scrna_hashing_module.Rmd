@@ -155,10 +155,10 @@ if(!exists("well_hto_json_df")){
 ```{r scrna_hash_read_hash}
 if(!exists("multiplet_hash")) {
   stm("Reading in hash matrixes from labeled h5 and multiplet h5 files")
-  labeled_hash_list <- future_lapply(all_h5, H5weaver::read_h5_dgCMatrix, target = "hash")
+  labeled_hash_list <- future_lapply(all_h5, H5weaver::read_h5_dgCMatrix, target = "hash", feature_names = "id", sample_names = "barcodes", index1 = TRUE)
   labeled_hash <- do.call(cbind, labeled_hash_list)
   
-  multiplet_hash_list <- future_lapply(all_multiplet_h5, read_h5_dgCMatrix, target = "hash")
+  multiplet_hash_list <- future_lapply(all_multiplet_h5, read_h5_dgCMatrix, target = "hash", feature_names = "id", sample_names = "barcodes", index1 = TRUE)
   multiplet_hash <- do.call(cbind, multiplet_hash_list)
   
   all_hash <- cbind(labeled_hash, multiplet_hash)
