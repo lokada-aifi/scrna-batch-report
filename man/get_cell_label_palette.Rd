@@ -13,7 +13,7 @@ defined method is Seurat3.}
 \item{cell_labels}{Character vector. All cell type labels in the dataset.}
 }
 \value{
-
+Dataframe of cell types and corresponding colors.
 }
 \description{
 For recognized labeling methods loads a cell-type specific color palette,

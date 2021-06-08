@@ -1,0 +1,801 @@
+<a id="scatac_hashing_contents"></a>  
+
+```{r, include = FALSE}  
+scatac_hashing_module_version <- "1.0.0"
+```  
+
+### Contents
+
+#### [Data Processing](#atac_hash_data_processing)
+- [Session Preparation](#atac_hash_session_preparation)
+- [Assemble Metadata](#atac_hash_assemble_meta) 
+
+#### [QC Metrics- All Cells](#atac_hash_qc_stats)
+- [ATAC vs HTO QC Categories](#atac_hash_qc_categories)
+- [ATAC vs HTO Doublet Comparison](#atac_hash_doublets)
+
+#### [QC Metrics- Singlets](#atac_hash_qc_stats_singlet)
+- [Sample QC Metrics](#atac_hash_sample_stats)
+- [Fragment Metrics](#atac_hash_sample_stats)
+  - [Unique Fragments](#atac_hash_fragment_stats_unique)
+  - [Mito. Fragments](#atac_hash_fragment_stats_mito)
+  - [FRIP](#atac_hash_fragment_stats_frip)
+  - [FRITSS](#atac_hash_fragment_stats_fritss)
+  - [Fraction in ENCODE/Altius Index](#atac_hash_fragment_stats_fralt)
+
+#### [Write QC JSON](#atac_hash_json_out)
+
+#### [Session Info](#atac_hash_session_info)  
+
+<a id="atac_hash_data_processing"></a>
+
+### Data Processing
+
+<a id="atac_hash_session_preparation"></a>
+
+#### Session Preparation
+
+<!-- begin collapsed session prep section -->
+<!-- <details style="color: lightgray;">   -->
+<!--   <summary>Expand session prep section</summary>    -->
+  
+##### Load libraries:
+```{r atac_hash_Load_Libraries}
+start_time_atac_hash <- Sys.time()
+
+quiet_library <- function(...) {
+  suppressPackageStartupMessages(library(...))
+}
+quiet_library(data.table)
+quiet_library(H5weaver)
+quiet_library(ggplot2)
+quiet_library(cowplot)
+quiet_library(jsonlite)
+quiet_library(purrr)
+options(stringsAsFactors = FALSE)
+```
+
+Declaring start
+```{r atac_hash_Declare_start}
+stm("Starting scATAC Cell Hashing Report Module")
+```
+
+##### Argument parsing  
+```{r atac_hash_Parse_arguments}
+if(is.null(in_atac)) {
+  in_atac <- system.file("testdata/batch_qc", package = "ATAComb")
+  batch_id <- "X055"
+  out_dir <- tempdir()
+} 
+
+stm(paste0("IN  ATAC results dir : ", in_atac))
+stm(paste0("IN  HTO dir          : ", in_hto))
+stm(paste0("IN  BatchID          : ", batch_id))
+stm(paste0("OUT Directory        : ", out_dir))
+```
+
+##### Input Parameters  
+```{r atac_hash_Print_Arguments}
+print(c(
+  paste0("IN  ATAC results dir : ", in_atac),
+  paste0("IN  HTO dir          : ", in_hto),
+  paste0("IN  BatchID          : ", batch_id),
+  paste0("OUT Directory        : ", out_dir)
+))
+```  
+  
+##### Check Input Files  
+```{r atac_hash_Check_Inputs}
+if(!dir.exists(in_atac)) {
+  stm(paste("ERROR: Cannot find IN results dir:", in_atac))
+  stop()
+}  
+if(!dir.exists(in_hto)) {
+  stm(paste("ERROR: Cannot find IN hto dir:", in_hto))
+  stop()
+}
+if(!dir.exists(out_dir)) {
+  stm(paste("Creating output directory:", out_dir))
+  dir.create(out_dir)
+}
+out_prefix <- file.path(out_dir, paste0(batch_id, "_"))
+```  
+
+##### Check available files  
+
+Unfiltered metadata  
+```{r}
+meta_files <- list.files(in_atac, 
+                         pattern = "_all_metadata.csv.gz$",
+                         full.names = TRUE)
+if(length(meta_files) == 0) {
+  stop("Can't find unfiltered metadata files. Check input directory for *_all_metadata.csv.gz files.")
+}
+
+stm("IN Full Metadata Files:")
+for(meta_file in meta_files) {
+  stm(meta_file)
+  print(meta_file)
+}
+
+meta_list <- map(meta_files, fread)
+sample_names <- sub(".+/","",sub("_all_metadata.csv.gz","",meta_files))
+names(meta_list) <- sample_names
+```  
+
+Filtered metadata  
+```{r}
+filt_meta_files <- list.files(in_atac, 
+                         pattern = "_filtered_metadata.csv.gz$",
+                         full.names = TRUE)
+
+if(length(filt_meta_files) < length(meta_files)) {
+  stop("Can't find filtered metadata files. Check input directory for *_filtered_metadata.csv.gz files.")
+} else if(length(filt_meta_files) > length(meta_files)) {
+  stop("Can't find all metadata files. Check input directory for *_all_metadata.csv.gz files.")
+}
+
+stm("IN Filtered Metadata Files:")
+for(filt_meta_file in filt_meta_files) {
+  stm(filt_meta_file)
+  print(filt_meta_file)
+}
+
+filt_meta_list <- map(filt_meta_files, fread)
+names(filt_meta_list) <- sub(".+/","",sub("_filtered_metadata.csv.gz","",filt_meta_files))
+filt_meta_list <- filt_meta_list[sample_names]
+```  
+  
+HTO metadata  
+```{r atac_hto_dependency_check, include = FALSE}
+# check hash folder exists
+assertthat::assert_that(dir.exists(in_hto), 
+                        msg = "Attempting to run rna quality with hto module. Input `in_dir` does not contain 'hto' folder")
+
+assertthat::assert_that(exists("in_config"),
+                         msg = "Attempting to rna quality with hto module. Missing `in_config` variable definition")
+assertthat::assert_that(file.exists(in_config),
+                         msg = sprintf("Attempting to run rna quality with hto module. Input file `in_config` [%s] does not exist", in_config))
+
+# Read in all hto metadata files, check expected numbers vs input well info
+all_hto_meta <- list.files(path = in_hto, 
+                           pattern = "hto_category_table.csv.gz$", 
+                           full.names = TRUE, recursive = TRUE)
+n_hto_meta <- length(all_hto_meta)
+if(n_hto_meta == 0){
+  stop(sprintf("No 'hto_category_table.csv.gz' files found in %s", in_hto))
+} 
+stm(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
+cat(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
+
+```  
+<!-- </details> -->
+<!-- End collapsed session prep section -->
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_assemble_meta"></a>
+
+#### Combine scATAC metadata  
+
+<!-- begin collapsed combine metadata section -->
+<!-- <details style="color: lightgray;">   -->
+<!--   <summary>Expand metadata prep section</summary>    -->
+
+```{r}
+filtered_meta <- do.call(rbind, filt_meta_list)
+meta <- do.call(rbind, meta_list)
+
+cutoffs <- list(altius_frac = 0.5,
+                tss_frac = 0.2,
+                peaks_frac = 0.2)
+
+meta$pass_fail <- "pass"
+for(i in seq_along(cutoffs)) {
+  cut_name <- names(cutoffs)[i]
+  cut_val <- cutoffs[[i]]
+  cut_logic <- meta[[cut_name]] <= cut_val
+  meta$pass_fail[cut_logic] <- "fail"
+}
+
+meta$filtered <- meta$barcodes %in% filtered_meta$barcodes
+meta$mito_frac <- meta$n_mito / meta$n_fragments
+meta$well_label <- paste0(meta$well_id, "\n", meta$pbmc_sample_id)
+
+well_samples <- unique(meta[,c("well_id","pbmc_sample_id","well_label")])
+```  
+
+##### Filter metadata based on cutoffs  
+```{r}
+stm("Filtering based on QC cutoffs")
+
+meta <- meta %>%
+  dplyr::left_join(dplyr::select(filtered_meta, barcodes, DoubletScore, DoubletEnrichment, TSSEnrichment), by = "barcodes")
+
+filtered_meta <- meta
+for(i in seq_along(cutoffs)) {
+  cut_name <- names(cutoffs)[i]
+  cut_val <- cutoffs[[i]]
+  filtered_meta <- filtered_meta[filtered_meta[[cut_name]] > cut_val]
+  filtered_meta <- filtered_meta[filtered_meta$filtered,]
+}
+
+filtered_meta$well_label <- paste0(filtered_meta$well_id, "\n", filtered_meta$pbmc_sample_id)
+
+well_filtered_meta_list <- split(filtered_meta, filtered_meta$well_id)
+```
+
+Set up global metadata for reporting
+```{r}
+meta$barcode_category <- "fail_qc"
+meta$barcode_category[!meta$filtered & meta$pass_fail == "pass"] <- "pass_doublet"
+meta$barcode_category[meta$filtered & meta$pass_fail == "pass"] <- "pass_singlet"
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+##### Format HTO metadata
+```{r atac_hto_meta_format} 
+stm("Formatting HTO meta data") 
+
+hto_meta_list <- lapply(all_hto_meta, fread)
+hto_meta_wells <- gsub("_.*","",basename(all_hto_meta))
+hto_meta_list <- mapply(function(x,y){x$well_id <- y; x}, hto_meta_list, hto_meta_wells, SIMPLIFY = F)
+hto_meta <- do.call(rbind, hto_meta_list)
+rm("hto_meta_list")
+
+hto_cat_levels <- c("no_hash", "singlet", "doublet", "multiplet")
+hto_meta[in_hto_key, on = 'hto_barcode', hto_name := i.hto_name]  # merge in the hto names
+hto_meta[ , pool_id := gsub("C\\dW\\d","", well_id)]
+hto_meta[ , sample_hto:= sprintf("%s\n%s", hto_name, get(sample_column_name))]
+hto_meta[ , sample_hto_pool:= sprintf("%s\n%s%s", hto_name, get(sample_column_name), pool_id)]
+hto_meta[ , hto_order:=  as.numeric(gsub("HT","", hto_name))]
+hto_meta[ , sample_hto_pool:=  factor(sample_hto_pool, levels = unique(sample_hto_pool[order(pool_id, hto_order)]))]
+hto_meta[ , hto_order:= NULL]
+hto_meta[ , hto_category:= factor(hto_category, levels = hto_cat_levels)]
+
+# well id to merge in hto info with atac data
+hto_meta[ , atac_well_id := gsub("-P","-AP", well_id)]
+hto_meta[ , atac_original_barcodes := paste0(cell_barcode, "-1")]
+
+hto_meta_singlet <- subset(hto_meta, hto_category=="singlet")
+
+```   
+[Return to Contents](#scatac_hashing_contents)
+
+##### Merge HTO and ATAC metadata
+```{r atac_merge_hto, fig.height= 2, fig.width = 6}
+stm("Merging hto data with ATAC metadata") 
+
+# Join in hto metadata for cells in atac dataset, rename some atac variables to avoid confusion
+meta_hto <- meta %>%
+    dplyr::rename(pbmc_sample_id_old = pbmc_sample_id) %>%
+    dplyr::rename(atac_well_id = well_id) %>%
+    dplyr::mutate(atac_pool_id = gsub("C.*", "", atac_well_id)) %>%
+    dplyr::left_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id")) %>%
+    dplyr::mutate(pool_id=ifelse(is.na(pool_id), gsub("-A","-", atac_pool_id),pool_id))
+
+meta_singlet <- meta_hto %>%
+    filter(hto_category == "singlet")
+
+# Full Join of hto and atac cells to compare existence between the two datasets
+meta_hto_full <- meta %>%
+    dplyr::rename(pbmc_sample_id_old = pbmc_sample_id) %>%
+    dplyr::rename(atac_well_id = well_id) %>%
+    dplyr::mutate(atac_pool_id = gsub("C.*", "", atac_well_id)) %>%
+    dplyr::full_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id")) %>%
+    dplyr::mutate(hto_category = factor(hto_category, levels = c(hto_cat_levels, "hto_missing"))) %>%
+    dplyr::mutate(hto_category = replace_na(hto_category, replace="hto_missing")) %>%
+    dplyr::mutate(barcode_category = replace_na(barcode_category, replace="atac_missing")) %>%
+    dplyr::mutate(pool_id=ifelse(is.na(pool_id), gsub("-A","-", atac_pool_id),pool_id))
+
+```  
+[Return to Contents](#scatac_hashing_contents)
+
+##### Merge HTO and Filtered ATAC metadata
+```{r atac_filter_merge_hto, fig.height= 2, fig.width = 6}
+stm("Merging hto data with filtered ATAC metadata") 
+
+# Join in hto metadata for cells in atac dataset, rename some atac variables to avoid confusion
+filtered_meta_hto <- filtered_meta %>%
+    dplyr::rename(pbmc_sample_id_old = pbmc_sample_id) %>%
+    dplyr::rename(atac_well_id = well_id) %>%
+    dplyr::left_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id")) 
+
+filtered_meta_singlet <- filtered_meta_hto %>%
+    dplyr::filter(hto_category == "singlet")  
+
+well_filtered_meta_singlet_list <- split(filtered_meta_singlet, filtered_meta_singlet$well_id)
+sample_filtered_meta_singlet_list <- split(filtered_meta_singlet, filtered_meta_singlet$pbmc_sample_id)
+
+```
+<!-- </details>   -->
+<!-- end collapsed metadata prep section -->  
+
+[Return to Contents](#scatac_hashing_contents)  
+
+<a id="atac_hash_qc_stats"></a>
+
+### QC Metrics: All Cells
+
+```{r}
+qc_list <- list(report_type = "atac_batch_qc",
+                report_datetime = as.character(start_time_atac_hash),
+                report_uuid = ids::uuid(use_time = TRUE),
+                package = "batchreporter",
+                package_version = sessionInfo()$otherPkgs$batchreporter$Version,
+                batch_id = sub("_.+","",sample_names[1]))
+
+out_json <- paste0(out_prefix, "atac_hashing_batch_qc_metrics.json")
+```
+
+<a id="atac_hash_qc_categories"></a>
+
+#### ATAC vs HTO QC Categories  
+Counts in "n_removed_atac" are cells in the HTO library that were filtered out in 
+ATAC preprocessing for failing to meet minimal quality thresholds. 
+Counts in "hto_missing" are cells in the ATAC library that were not detected in
+the HTO library.  
+  
+```{r atac_hto_qc_cat}
+stm("Generating HTO/ATAC QC Category contingency table") 
+
+barcode_counts_htocat <- meta_hto_full[,.(n_barcodes = nrow(.SD),
+                            n_pass_qc = sum(.SD$pass_fail == "pass", na.rm = T),
+                            n_fail_qc = sum(.SD$pass_fail == "fail", na.rm = T),
+                            n_removed_atac = sum(is.na(.SD$pass_fail)),
+                            percent_fail = round(sum(.SD$pass_fail == "fail", na.rm=T)/sum(!is.na(.SD$pass_fail))*100,2),
+                            pass_singlets = sum(.SD$barcode_category == "pass_singlet", na.rm=T),
+                            pass_doublets = sum(.SD$barcode_category == "pass_doublet", na.rm=T),
+                            percent_doublets = round(sum(.SD$barcode_category == "pass_doublet", na.rm=T)/sum(.SD$pass_fail == "pass", na.rm=T)*100,2)),
+                         .(atac_well_id, hto_category)]
+
+qc_list$barcode_stats_allhtoatac <- as.list(barcode_counts_htocat)
+
+qc_table(barcode_counts_htocat)
+```
+
+```{r atac_hto_qc_cat_barplots, results = "asis"} 
+stm("Plotting HTO/ATAC QC Category barplots") 
+g1 <- qc_aligned_barplot_facet(meta_hto_full, category_x = "barcode_category", category_name = "HTO Category", 
+                   category_y = "hto_category", name_y = "N Cells", 
+                   name_x = "ATAC Barcode Category",colorset_y = "varibow", facet_formula = as.formula("~pool_id"))  
+g2 <- qc_aligned_barplot_facet(meta_hto_full, category_x = "hto_category", category_name = "ATAC Barcode Category", 
+                   category_y = "barcode_category", name_y = "N Cells", 
+                   name_x = "HTO Category",colorset_y = "varibow", facet_formula = as.formula("~pool_id"))
+
+npool <- length(unique(meta_hto_full$pool_id))
+temp_figwidth <- 6*npool
+temp_figheight <- 4
+
+make_subchunk(g1, subchunk_name = "subchunk_htocat_ataccat",chunk_opt_list = list(fig.width = temp_figwidth, fig.height = temp_figheight))
+make_subchunk(g2, subchunk_name = "subchunk_ataccat_htocat",chunk_opt_list = list(fig.width = temp_figwidth, fig.height=temp_figheight))
+
+# cowplot::plot_grid(g1, g2, align = "hv", axis = "tblr")
+```   
+[Return to Contents](#scatac_hashing_contents)  
+
+<a id="atac_hash_doublets"></a>
+
+#### ATAC vs HTO Doublet Comparison  
+```{r fig.height = 3, fig.width = 12} 
+stm("Plotting ATAC Doublet Enrichment by HTO Categorys") 
+gbox1 <- ggplot(meta_hto, aes(hto_category, DoubletEnrichment)) +
+    geom_point(position = position_jitter(height = 0, width = 0.3), alpha = 0.1, aes(color = hto_category))+
+    geom_boxplot(alpha = 0, outlier.alpha = 1)  +
+    facet_wrap(~pool_id)
+
+    # geom_violin(alpha = 0) + 
+
+gbox2 <- ggplot(meta_hto, aes(hto_category, DoubletScore)) +
+    geom_point(position = position_jitter(height = 0, width = 0.3), alpha = 0.1, aes(color = hto_category))+
+    geom_boxplot(alpha = 0, outlier.alpha = 1)  +
+    facet_wrap(~pool_id)
+    # geom_violin(alpha = 0) + 
+
+cowplot::plot_grid(gbox1, gbox2, align = "hv")
+
+```  
+
+<a id="atac_hash_qc_stats_singlet"></a>  
+
+### QC Metrics: Singlet Cells  
+QC stats for singlet cells as identified by hashing.  
+
+<a id="atac_hash_sample_stats"></a>
+
+#### Sample QC Metrics 
+```{r}
+barcode_counts <- meta_singlet[,.(n_barcodes = nrow(.SD),
+                            n_pass_qc = sum(.SD$pass_fail == "pass"),
+                            n_fail_qc = sum(.SD$pass_fail == "fail"),
+                            percent_fail = round(sum(.SD$pass_fail == "fail")/nrow(.SD)*100,2),
+                            pass_singlets = sum(.SD$barcode_category == "pass_singlet"),
+                            pass_doublets = sum(.SD$barcode_category == "pass_doublet"),
+                            percent_doublets = round(sum(.SD$barcode_category == "pass_doublet")/sum(.SD$pass_fail == "pass")*100,2)),
+                         .(pool_id, pbmc_sample_id)]
+
+qc_list$barcode_stats <- as.list(barcode_counts)
+
+qc_table(barcode_counts)
+```
+
+```{r}
+qc_stacked_barplot(meta_singlet,
+                   category_x = "sample_hto_pool",
+                   name_x = "Sample",
+                   category_y = "barcode_category",
+                   category_name = "Barcode Category",
+                   as_fraction = TRUE) +
+  xlab("Fraction Cells")
+```
+
+```{r}
+qc_aligned_barplot_facet(meta_singlet,
+                   category_x = "sample_hto_pool",
+                   name_x = "Sample",
+                   category_y = "barcode_category",
+                   category_name = "Barcode Category", facet_formula = as.formula("~pool_id"))
+```
+
+```{r}
+qc_violin_plot(filtered_meta_singlet,
+               category_x = "sample_hto_pool",
+               name_x = "Sample",
+               column_y = "DoubletEnrichment",
+               name_y = "Doublet Enrichment",
+               log_y = FALSE,
+               fill = "dodgerblue")
+```
+
+```{r}
+qc_violin_plot(filtered_meta_singlet,
+               category_x = "sample_hto_pool",
+               name_x = "Sample",
+               column_y = "DoubletScore",
+               name_y = "Doublet Score",
+               log_y = FALSE,
+               fill = "dodgerblue")
+```
+
+```{r}
+qc_violin_plot(filtered_meta_singlet,
+               category_x = "sample_hto_pool",
+               name_x = "Sample",
+               column_y = "TSSEnrichment",
+               name_y = "TSS Enrichment",
+               log_y = FALSE,
+               fill = "dodgerblue")
+```
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_fragment_stats"></a>
+
+#### Fragment QC Metrics
+Fragment QC stats for all singlet cells as determined by HTO category.  
+
+Plot Settings
+```{r}
+n_grid_columns <- min(length(sample_filtered_meta_singlet_list),4)
+n_grid_rows <- ceiling(length(sample_filtered_meta_singlet_list)/4)
+
+grid_width <- n_grid_columns * 3
+grid_height <- n_grid_rows * 3
+```
+
+
+```{r}
+fragment_stats <- filtered_meta_singlet[,.(n_singlets = nrow(.SD[.SD$filtered]),
+                                   med_raw_frag = round(median(n_fragments),0),
+                                   med_raw_perc_mito = round(median(mito_frac)*100,4),
+                                   med_unique_frag = round(median(n_unique),0),
+                                   med_unique_fritss = round(median(tss_frac),4),
+                                   med_unique_frip = round(median(peaks_frac),4),
+                                   med_unique_encode = round(median(altius_frac),4)
+                                   ),
+                                .(pool_id, pbmc_sample_id)]
+
+qc_list$fragment_stats <- as.list(fragment_stats)
+
+qc_table(fragment_stats)
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_fragment_stats_unique"></a>
+
+#### Unique Fragments per Cell
+```{r}
+# violins for all atac data by atac category
+category_reads_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "barcode_category",
+                                         name_x = "Barcode Type",
+                                         column_y = "n_unique",
+                                         name_y = "Unique Fragments",
+                                         fill = "dodgerblue")
+# violins for all atac data by hto category
+hto_reads_violins <- qc_violin_plot(meta_hto,
+                                     category_x = "hto_category",
+                                     name_x = "HTO Category",
+                                     column_y = "n_unique",
+                                     name_y = "Unique Fragments",
+                                     fill = "dodgerblue")
+well_reads_violins <- qc_violin_plot(filtered_meta_singlet,
+                                     category_x = "sample_hto_pool",
+                                     name_x = "Sample",
+                                     column_y = "n_unique",
+                                     name_y = "Unique Fragments (Singlets)",
+                                     fill = "dodgerblue")
+
+reads_violin_list <- list(category_reads_violins, 
+                          hto_reads_violins,
+                          well_reads_violins)
+
+plot_grid(plotlist = reads_violin_list,
+          ncol = 3, rel_widths = c(1, 1, 3), 
+          nrow = 1, align = "h")
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_fragment_stats_mito"></a>
+
+#### Fraction of Raw Reads in Mitochondria per Cell
+```{r}
+category_mito_violins <- qc_violin_plot(meta_hto,
+                                        category_x = "barcode_category",
+                                        name_x = "Barcode Type",
+                                        column_y = "mito_frac",
+                                        name_y = "Fraction Mitochondrial",
+                                        fill = "darkgreen",
+                                        log_y = F) 
+
+hto_mito_violins <- qc_violin_plot(meta_hto,
+                                    category_x = "hto_category",
+                                    name_x = "HTO Category",
+                                    column_y = "mito_frac",
+                                    name_y = "Fraction Mitochondrial",
+                                    fill = "darkgreen",
+                                    log_y = F)
+
+sample_mito_violins <- qc_violin_plot(filtered_meta_singlet,
+                                     category_x = "sample_hto_pool",
+                                     name_x = "Sample",
+                                     column_y = "mito_frac",
+                                     name_y = "Fraction Mito. (Singlets)",
+                                     fill = "darkgreen",
+                                     log_y = F)
+
+mito_violin_list <- list(category_mito_violins, 
+                         hto_mito_violins,
+                          sample_mito_violins)
+
+
+plot_grid(plotlist = mito_violin_list,
+          ncol = 3, rel_widths = c(1, 1, 3), 
+          nrow = 1, align = "h")
+
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_fragment_stats_frip"></a>
+
+#### Fraction of Reads in Peaks per Cell
+```{r}
+category_frip_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "barcode_category",
+                                         name_x = "Barcode Type",
+                                         column_y = "peaks_frac",
+                                         name_y = "FRIP",
+                                         fill = "orangered",
+                                        log_y = FALSE)
+hto_frip_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "hto_category",
+                                         name_x = "HTO Category",
+                                         column_y = "peaks_frac",
+                                         name_y = "FRIP",
+                                         fill = "orangered",
+                                        log_y = FALSE)
+sample_frip_violins <- qc_violin_plot(filtered_meta_singlet,
+                                     category_x = "sample_hto_pool",
+                                     name_x = "Sample",
+                                     column_y = "peaks_frac",
+                                     name_y = "FRIP (Singlets)",
+                                     fill = "orangered",
+                                    log_y = FALSE)
+
+frip_violin_list <- list(category_frip_violins, 
+                         hto_frip_violins,
+                         sample_frip_violins)
+
+plot_grid(plotlist = frip_violin_list,
+          ncol = 3, rel_widths = c(1, 1, 3),
+          nrow = 1, align = "h")
+```
+
+#### Reads vs peaks_frac scatter
+```{r fig.width=grid_width, fig.height=grid_height}
+qc_scatter_list <- map(sample_filtered_meta_singlet_list,
+                       function(sample_meta) {
+                         qc_scatter_plot(sample_meta,
+                                         column_x = "n_unique",
+                                         name_x = "N Unique Fragments per Cell",
+                                         column_y = "peaks_frac",
+                                         name_y = "Frac Fragments in Peaks (peaks_frac)",
+                                         log_x = TRUE, log_y = FALSE, frac_y = TRUE,
+                                         show_targets = FALSE,
+                                         color = "orangered") +
+                           geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
+                           geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2) +
+                           ggtitle(sprintf("%s %s", sample_meta$pool_id[1], sample_meta$pbmc_sample_id[1]))
+                       })
+
+plot_grid(plotlist = qc_scatter_list,
+          ncol = n_grid_columns,
+          nrow = n_grid_rows)
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_fragment_stats_fritss"></a>
+
+#### Fraction of Reads in TSS (+/- 2kb) per Cell
+```{r}
+category_fritss_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "barcode_category",
+                                         name_x = "Barcode Type",
+                                         column_y = "tss_frac",
+                                         name_y = "FRITSS",
+                                         fill = "mediumorchid3",
+                                        log_y = FALSE)  
+hto_fritss_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "hto_category",
+                                         name_x = "HTO Category",
+                                         column_y = "tss_frac",
+                                         name_y = "FRITSS",
+                                         fill = "mediumorchid3",
+                                        log_y = FALSE)
+well_fritss_violins <- qc_violin_plot(filtered_meta_singlet,
+                                     category_x = "sample_hto_pool",
+                                     name_x = "Sample",
+                                     column_y = "tss_frac",
+                                     name_y = "FRITSS (Singlets)",
+                                     fill = "mediumorchid3",
+                                    log_y = FALSE)
+
+fritss_violin_list <- list(category_fritss_violins, 
+                           hto_fritss_violins,
+                           well_fritss_violins)
+
+plot_grid(plotlist = fritss_violin_list,
+          ncol = 3, rel_widths = c(1, 1, 3),
+          nrow = 1, align = "h")
+```
+
+#### Reads vs tss_frac scatter
+```{r fig.width=grid_width, fig.height=grid_height}
+qc_scatter_list <- map(sample_filtered_meta_singlet_list,
+                       function(sample_meta) {
+                         qc_scatter_plot(sample_meta,
+                                         column_x = "n_unique",
+                                         name_x = "N Unique Fragments per Cell",
+                                         column_y = "tss_frac",
+                                         name_y = "Frac Fragments in TSS (tss_frac)",
+                                         log_x = TRUE, log_y = FALSE, frac_y = TRUE,
+                                         show_targets = FALSE,
+                                         color = "mediumorchid3") +
+                           geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
+                           geom_hline(aes(yintercept = cutoffs$tss_frac), linetype = "dashed", size = 0.2) +
+                           ggtitle(sprintf("%s %s", sample_meta$pool_id[1],sample_meta$pbmc_sample_id[1]))
+                       })
+
+plot_grid(plotlist = qc_scatter_list,
+          ncol = n_grid_columns,
+          nrow = n_grid_rows)
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_fragment_stats_fralt"></a>
+
+#### Fraction of Reads in ENCODE/Altius Index per Cell
+```{r}
+category_enc_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "barcode_category",
+                                         name_x = "Barcode Type",
+                                         column_y = "altius_frac",
+                                         name_y = "FRIENCODE",
+                                         fill = "darkred",
+                                        log_y = FALSE)
+hto_enc_violins <- qc_violin_plot(meta_hto,
+                                         category_x = "hto_category",
+                                         name_x = "HTO Category",
+                                         column_y = "altius_frac",
+                                         name_y = "FRIENCODE",
+                                         fill = "darkred",
+                                        log_y = FALSE)
+well_enc_violins <- qc_violin_plot(filtered_meta_singlet,
+                                     category_x = "pbmc_sample_id",
+                                     name_x = "Sample ID",
+                                     column_y = "altius_frac",
+                                     name_y = "FRIENCODE (Singlets)",
+                                     fill = "darkred",
+                                    log_y = FALSE)
+
+enc_violin_list <- list(category_enc_violins, 
+                        hto_enc_violins,
+                        well_enc_violins)
+
+plot_grid(plotlist = enc_violin_list,
+          ncol = 3, rel_widths = c(1, 1, 3),
+          nrow = 1, align = "h")
+```
+
+#### Reads vs altius_frac scatter
+```{r fig.width=grid_width, fig.height=grid_height}
+qc_scatter_list <-map(sample_filtered_meta_singlet_list,
+                       function(sample_meta) {
+                         qc_scatter_plot(sample_meta,
+                                         column_x = "n_unique",
+                                         name_x = "N Unique Fragments per Cell",
+                                         column_y = "altius_frac",
+                                         name_y = "Frac Fragments in Altius (altius_frac)",
+                                         log_x = TRUE, log_y = FALSE, frac_y = TRUE,
+                                         show_targets = FALSE,
+                                         color = "darkred") +
+                           geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
+                           geom_hline(aes(yintercept = cutoffs$altius_frac), linetype = "dashed", size = 0.2) +
+                           ggtitle(sprintf("%s %s", sample_meta$pool_id[1],sample_meta$pbmc_sample_id[1]))
+                       })
+
+plot_grid(plotlist = qc_scatter_list,
+          ncol = n_grid_columns,
+          nrow = n_grid_rows)
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_json_out"></a>
+
+### Write QC JSON
+
+```{r atac_hash_Save_QC_JSON}
+stm(paste0("Writing JSON to ",out_json))
+
+qc_list_json <- jsonlite::toJSON(qc_list,
+                                 auto_unbox = TRUE,
+                                 pretty = TRUE)
+
+writeLines(qc_list_json,
+           out_json)
+```
+
+[Return to Contents](#scatac_hashing_contents)
+
+<a id="atac_hash_session_info"></a>
+
+### Session Information
+
+```{r atac_hash_Session_Info}
+sessionInfo()
+```
+
+Total time elapsed
+```{r atac_hash_Show_Time}
+end_time <- Sys.time()
+diff_time <- end_time - start_time_atac_hash
+time_message <- paste0("Elapsed Time: ", 
+                       round(diff_time, 3),
+                       " ", units(diff_time))
+print(time_message)
+stm(time_message)
+stm("10x ATAC Batch QC Report complete.")
+```
+
+[Return to Contents](#scatac_hashing_contents)  
+
+---  
+
+Hashed scATAC batch QC module `r {scatac_hashing_module_version}`, Lucas Graybuck, Lauren Okada  
+

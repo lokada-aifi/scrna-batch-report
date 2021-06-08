@@ -1,0 +1,393 @@
+---
+title: "NGS Sequencing Batch Summary: `r {params$batch_id}`"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    self_contained: true
+  tables: yes
+params:
+  batch_id: NULL
+  in_dir: NULL
+  in_key: NULL
+  in_method: NULL
+  in_batch_meta: NULL
+  in_config: NULL 
+  out_dir: NULL
+  ngs_report_version: 1.0.0
+---  
+
+# {.tabset}  
+
+## Batch Summary {.active} 
+<!-- create details section to collapse multiple no-output code blocks to save space -->
+<details style="color: lightgray;"> 
+  <summary>Expand Code</summary> 
+  
+```{r setup, include = TRUE}
+# Load Libraries
+start_time_all <- Sys.time()
+
+options(warn = 1)  # output warnings as they appear for traceability in stdout/stderr record
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE) # warnings will go to console
+
+quiet_library <- function(...) {
+  suppressPackageStartupMessages(library(...))
+}
+
+quiet_library(batchreporter)
+quiet_library(Matrix)        # dependency of H5weaver
+quiet_library(rhdf5)         # dependency of H5weaver
+quiet_library(H5weaver)      # aifi package
+quiet_library(HTOparser)     # aifi package
+quiet_library(ggplot2)       
+quiet_library(dplyr)         # data wrangling
+quiet_library(cowplot)       # arranging multiple plots
+quiet_library(gt)            # formatted table output
+quiet_library(plotly)        # interactive plots
+quiet_library(tidyr)         # data wrangling  
+quiet_library(jsonlite)      # reading and writing json metadata files
+quiet_library(purrr)         
+quiet_library(future)        # multi-threading for batch umap creation
+quiet_library(future.apply)  # multi-threading for batch umap creation
+quiet_library(Seurat)
+
+stm("Starting NGS Batch Report")
+
+stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))  
+```  
+
+Argument Parsing  
+```{r parse_arguments}
+# give input directory rna-specific name 
+if(is.null(params$in_dir)) {
+  batch_id <- "X070"
+  in_dir <- system.file("extdata/X070", package = "batchreporter")
+  in_key <- system.file("extdata/example_sample_key_X070.csv", package = "batchreporter")
+  in_config <- system.file("extdata/default_rna_config_v1.csv", package = "batchreporter")
+  in_batch_meta <- system.file("extdata/batch-metadata.json", package = "batchreporter")
+  in_method_string <- "scrna;scatac;adt;hto"
+  out_dir <- tempdir()
+} else {
+  batch_id <-  params$batch_id  
+  in_method_string <- params$in_method
+  in_dir <- params$in_dir  
+  in_key <- params$in_key  
+  in_config <- params$in_config  
+  if(is.null(in_config)){
+      in_config <- system.file("extdata/default_rna_config_v1.csv", package = "batchreporter")
+      stm("No config file provided. Using default_rna_config_v1.csv for pbmc data")
+  }
+  out_dir <- params$out_dir
+  in_batch_meta <- params$in_batch_meta
+  if(is.null(in_batch_meta)){in_batch_meta <- NA}
+}
+
+stm(paste0("IN Batch        : ", batch_id))
+stm(paste0("IN Method       : ", in_method_string))
+stm(paste0("IN Directory    : ", in_dir))
+stm(paste0("IN Sample Key   : ", in_key))
+stm(paste0("IN Config       : ", in_config))
+stm(paste0("IN Batch Processing Info : ", in_batch_meta))
+stm(paste0("OUT Dir         : ", out_dir))
+
+print(paste0("IN Batch        : ", batch_id))
+print(paste0("IN Method       : ", in_method_string))
+print(paste0("IN Directory    : ", in_dir))
+print(paste0("IN Sample Key   : ", in_key))
+print(paste0("IN Config       : ", in_config))
+print(paste0("IN Batch Processing Info : ", in_batch_meta))
+print(paste0("OUT Dir         : ", out_dir))
+```  
+
+Check input files  
+```{r check_input_main}
+if(!dir.exists(in_dir)) {
+  stm(paste("ERROR: Cannot find IN results dir:", in_dir))
+  stop()
+}
+if(!file.exists(in_key)) {
+  stm(paste("ERROR: Cannot find IN sample key:", in_key))
+  stop()
+}
+if(!file.exists(in_config)) {
+  stm(paste("ERROR: Cannot find IN config file:", in_config))
+  stop()
+}
+if(!is.na(in_batch_meta) && !file.exists(in_batch_meta)) {
+  stm(paste("ERROR: Cannot find IN batch meta:", in_batch_meta))
+  stop()
+}
+if(!dir.exists(out_dir)) {
+  stm(paste("Creating output directory:", out_dir))
+  dir.create(out_dir)
+}
+
+out_prefix <- file.path(out_dir, paste0(batch_id, "_"))
+
+```
+
+Read in the sample key  
+```{r read_key}
+stm("Reading in sample key")
+df_key <- data.table::fread(in_key)
+has_controls <- any(grepl("Control", df_key$Type))  # used to control evaluation of batch control-related code chunks
+
+assertthat::assert_that(length(unique(df_key$BatchID)) == 1, msg = "More than 1 batch in input sample key file")
+assertthat::assert_that(batch_id == unique(df_key$BatchID), msg = "Batch in input key file does not match input batch value")
+
+```
+
+Determine which modalities streams were run  
+```{r determine_modalities}
+defined_modalities <- c("scrna", "scatac", "adt", "hto")
+
+# convert method string to vector
+in_method <- strsplit(in_method_string, split = ";")[[1]]
+in_method <- tolower(in_method)
+
+# Logic check input methods
+if(!all(in_method %in% defined_modalities)){
+    unknowns <- setdiff(in_method, defined_modalities)
+    stop(sprintf("One or more input methods are not in defined modalities: '%s'. Defined modalities are: [%s]. Input methods should be passed as a ';'-delimited string, ie 'scrna;scatac;hto'.",
+                    paste(unknowns, collapse = "', '"),
+                    paste(defined_modalities, collapse = ', ')))
+} 
+
+has_rna <- "scrna" %in% in_method
+has_atac <- "scatac" %in% in_method
+has_adt <- "adt" %in% in_method
+has_hto <- "hto" %in% in_method
+
+```  
+
+Define and check input folder expectations  
+```{r define_input_folders}
+if(has_rna){
+  in_rna <- file.path(in_dir, "scrna")
+  if(!dir.exists(in_rna)){
+    stop(sprintf("Expected RNA input directory [%s] does not exist.", in_rna))
+  }
+}
+
+if(has_atac){
+  in_atac <- file.path(in_dir, "scatac")
+  if(!dir.exists(in_atac)){
+    stop(sprintf("Expected ATAC input directory [%s] does not exist.", in_atac))
+  }
+}
+
+if(has_adt){
+  in_adt <- file.path(in_dir, "adt")
+  if(!dir.exists(in_adt)){
+    stop(sprintf("Expected ADT input directory [%s] does not exist.", in_adt))
+  }
+}
+
+if(has_hto){
+  in_hto <- file.path(in_dir, "hto")
+  if(!dir.exists(in_hto)){
+    stop(sprintf("Expected HTO input directory [%s] does not exist.", in_hto))
+  }
+}
+
+```  
+
+</details> 
+
+### Batch Information    
+
+```{r batchinfo, include = TRUE}
+stm("Constructing Batch Information table")
+
+# Summarize batch information, also declare some global batch variables that are used throughout the report
+pools <- unique(df_key$PoolID)
+n_pools <- length(pools)
+if(n_pools==1 & grepl("P0$", pools)){
+  n_pools_label <- 0
+} else {
+  n_pools_label <- n_pools
+}
+
+wells <- unlist(strsplit(unique(df_key$WellID), split = ";"))
+n_wells <- length(wells)
+
+samples <- unique(df_key$SampleID)
+n_samples <- length(samples)
+
+controls <- unique(df_key$SampleID[df_key$Type == "Control"])
+control_string <- ifelse(has_controls, paste(controls, collapse = ", "), "None")
+
+if (has_controls){
+  n_study_samples <- setdiff(samples, controls)
+} else {
+  n_study_samples <- samples
+}
+
+n_study_samples <- length(n_study_samples)
+
+samples_pool <- tapply(df_key$SampleID, df_key$PoolID, unique)
+samples_pool_string <- sapply(samples_pool, function(x){paste(x, collapse = ", ")})
+
+labels <- c("Batch","Libraries","N Samples", "N Pools","N Wells","Batch Control", paste0(pools, " Samples"))
+values <-  c(batch_id, in_method_string, n_study_samples, n_pools_label, n_wells, control_string, samples_pool_string)
+
+simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
+
+```  
+
+### Batch Processing  
+
+```{r display_processing_details, results = "asis"}
+if(!is.na(in_batch_meta)){
+  if(!file.exists(in_batch_meta)) {stop(sprintf("Supplied in_batch_meta file '%s' does not exist. ",in_batch_meta))}
+  meta_table <- jsonlite::read_json(in_batch_meta)
+  meta_table <- as.data.frame(meta_table)  # collapses any nested names
+  
+  if(nrow(meta_table) == 1){
+    simple_html_table(colnames(meta_table), unlist(meta_table[1,]), fontsize = 3, col_widths_px = c(200,250))
+  } else{
+    stop(sprintf("in_batch_meta file should have 1:1 key value pairs. Check supplied file '%s' for proper formatting. ",in_batch_meta))
+  }
+} else {
+  cat("No processing details supplied")
+}  
+```   
+
+```{r hashing_tab, results = "asis", eval = has_hto, echo = FALSE}
+cat("## Cell Hashing", sep = "\n")
+
+```  
+
+```{r hashing_child, child = system.file("rmarkdown/hto_module.Rmd", package = "batchreporter"), eval = has_hto}
+
+```  
+
+```{r scrna_tab, results = "asis", eval = has_rna, echo = FALSE}
+cat("## scRNA Well", sep = "\n")
+
+```  
+
+```{r scrna_seq_child, child =  system.file("rmarkdown/scrna_well_module.Rmd", package = "batchreporter"), eval = has_rna}
+
+```   
+
+```{r scrna_hto_tab, results = "asis", eval = has_rna & has_hto, echo = FALSE}
+cat("## scRNA Sample", sep = "\n")
+
+```   
+
+```{r hashed_rna_child, child = system.file("rmarkdown/scrna_hashed_sample_module.Rmd", package = "batchreporter"),eval = has_rna & has_hto}
+
+``` 
+
+```{r adt_tab, results = "asis", eval = has_adt, echo = FALSE}
+cat("## ADT Well", sep = "\n")
+
+```  
+
+```{r adt_child, child = system.file("rmarkdown/adt_well_module.Rmd", package = "batchreporter"), eval = has_adt}
+
+```   
+
+```{r hashed_adt_tab, results = "asis", eval = has_adt & has_hto, echo = FALSE}
+cat("## ADT Sample", sep = "\n")
+
+```
+
+```{r hashed_adt_child, child = system.file("rmarkdown/adt_hashed_sample_module.Rmd", package = "batchreporter"), eval = has_adt & has_hto}
+
+```
+
+```{r atac_tab, results = "asis", eval = has_atac, echo = FALSE}
+cat("## scATAC Well", sep = "\n")
+
+```  
+
+```{r atac_child, child =  system.file("rmarkdown/scatac_seq_module.Rmd", package = "batchreporter"), eval =  has_atac}
+
+```   
+
+```{r hashed_atac_tab, results = "asis", eval = has_atac & has_hto, echo = FALSE}
+cat("## scATAC Sample", sep = "\n")
+
+```  
+  
+```{r hashed_atac_child, child = system.file("rmarkdown/scatac_hashing_module.Rmd", package = "batchreporter"), eval = has_atac & has_hto}
+
+```   
+  
+## Session Information   
+
+<a id="top_session_info"></a>  
+
+Input Directory:  
+
+```{r echo_in_dir}
+in_dir 
+
+```  
+Input Directory Contents:  
+
+```{r echo_in_files}
+folders <- list.dirs(in_dir, recursive = FALSE)
+
+file_list <- lapply(folders, function(x){
+  dir(x, recursive = TRUE)
+})
+names(file_list) <- basename(folders)
+file_list
+
+```  
+
+Batch processing metadata:  
+
+```{r echo_processing_method}
+in_batch_meta 
+
+```  
+
+Config File:  
+```{r echo_config_files}
+in_config
+
+```  
+
+Key File:  
+```{r echo_key_files}
+in_key
+
+```  
+
+Output Directory:  
+```{r echo_out_dir}
+out_dir
+
+``` 
+
+Session Info:  
+```{r session_info_main}
+sessionInfo()
+```
+
+Total time elapsed
+```{r show_time_main}
+end_time_all <- Sys.time()
+diff_time_all <- end_time_all - start_time_all
+time_message_all <- paste0("Elapsed Time: ", 
+                       round(diff_time_all, 3),
+                       " ", units(diff_time_all))
+print(time_message_all)
+stm(time_message_all)
+stm("Batch report process complete.")
+```  
+
+[Return to Top](#top_session_info)
+
+# {-}
+
+---  
+
+NGS report v.`r {params$ngs_report_version}`, Lauren Okada

@@ -1,0 +1,4 @@
+SampleID,Type,BatchID,HashTag,PoolID,WellID
+Sample01,Sample,X000,NA,X000-P1,X000-P1C1W1
+Sample02,Sample,X000,NA,X000-P1,X000-P1C1W2
+Sample03,Sample,X000,NA,X000-P1,X000-P1C1W3
