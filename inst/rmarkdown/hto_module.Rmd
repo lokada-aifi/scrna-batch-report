@@ -1,0 +1,787 @@
+<!-- # Child Rmarkdown Document for HTO QC outputs-->
+<!-- Parent document must have a variable "in_dir" containing a subfolder "hto" and "rna" -->
+<a id="top_cell_hashing"></a>  
+
+```{r, include = FALSE}
+hto_module_version <- "1.0.0"
+```
+
+```{r include = FALSE}
+hto_warning_list <- character()
+# rna_in_dir <- system.file("extdata/FullBatch", package = "batchreporter")
+# in_key <- system.file("extdata/example_sample_key.csv", package = "batchreporter")
+#
+```
+
+The following data summarizes parsing of hash tag oligos (HTO's) per well and filtering for singlet cells based on cross-hash doublet/multiplet identification.  
+
+### Contents 
+
+#### [Hash Tag UMI](#hashtag_umi)
+- [Pool HTO UMI Counts](#pool_hto_umi_counts)
+- [Well HTO UMI Counts](#well_hto_umi_counts)
+- [Well HTO UMI Counts by HTO](#well_hto_umi_counts_hto)
+
+#### [HTO Parsing](#hto_parsing)
+- [HTO Positive Cells per Well](#hto_positive_cells_well)
+- [HTO Distributions](#hto_distributions)
+- [HTO Cutoffs](#hto_cutoffs)
+- [HTO Positivity Rate](#hto_positivity_rate)  
+
+#### [HTO Category Summary](#hto_category_summary)  
+- [Pool Hashing Summary](#pool_hashing_summary)
+- [HTO Category Counts by Well](#hto_category_well)
+- [HTO Category Fraction by Well](#hto_category_fraction_well)  
+
+#### [Singlet Summaries (well-based)](#singlet_section_well)  
+- [Well-Based Singlet Summary](#well_singlet_summary)
+- [HTO Barcode Counts by Well](#hto_barcode_well)
+- [HTO Barcode Fraction by Well](#hto_barcode_fraction_well)
+
+#### [Singlet Summaries (hto-based)](#singlet_section_hto)  
+- [Hash-Based Singlet Summary](#hto_singlet_summary)
+- [Well Counts per HTO Barcode Plot](#well_hto_barcode)
+- [Well Fraction per HTO Barcode Plot](#well_fraction_hto_barcode)  
+  
+```{r hto_warning_summary, ref.label="print_hto_warnings"} 
+
+```  
+
+<!-- create details section to collapse multiple no-output code blocks to save space -->
+<details style="color: lightgray;">  
+  <summary>Expand Code</summary> 
+  
+```{r hto_dependency_check, include = FALSE}
+# check main rna input directory
+assertthat::assert_that(exists("in_dir"), 
+                        msg = "Attempting to run hto module. Missing `in_dir` variable definition")
+# check hash folder exists
+assertthat::assert_that(dir.exists(in_hto), 
+                        msg = "Attempting to run hto module. Input `in_dir` does not contain 'hto' folder")
+
+assertthat::assert_that(exists("in_key"),
+                         msg = "Attempting to run hto module. Missing `in_key` variable definition")
+assertthat::assert_that(file.exists(in_key),
+                         msg = sprintf("Attempting to run hto module. Input file `in_key` [%s] does not exist", in_key))
+
+assertthat::assert_that(exists("in_config"),
+                         msg = "Attempting to run hto module. Missing `in_config` variable definition")
+assertthat::assert_that(file.exists(in_config),
+                         msg = sprintf("Attempting to run hto module. Input file `in_config` [%s] does not exist", in_config))
+
+```  
+
+```{r hto_read_config}
+# Config
+config_list<- batchreporter::load_config(in_config)
+
+hash_key <- config_list$hash_key
+sample_column_name <- config_list$sample_column_name
+
+# Sample Key
+df_key <- data.table::fread(in_key)
+
+pools <- unique(df_key$PoolID)
+n_pools <- length(pools)
+
+wells <- unlist(strsplit(unique(df_key$WellID), split = ";"))
+n_wells <- length(wells)
+
+samples <- unique(df_key$SampleID)
+n_samples <- length(samples)
+
+```
+
+
+```{r rna_hash_files}
+# Read in all hto key to match hto names to barcodes
+hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser")  # Parameterize this value
+in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
+  mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
+  mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% # use HT number value to reorder the HT levels
+  select(-hto_order)
+
+# Read in all hto json, check expected numbers vs input well info
+all_hto_json <- list.files(path = in_hto, 
+                           pattern = "hto_processing_metrics.json$", 
+                           full.names = TRUE, recursive = TRUE)
+n_json <- length(all_hto_json)
+if(n_json == 0){
+  stop(sprintf("No 'hto_processing_metrics.json' files found in %s", in_hto))
+} else if (n_json < n_wells){
+  hto_json_warn <- sprintf("Input number of 'hto_processing_metrics.json' files (%s) is fewer than number of wells (%s) in sample key",
+                           n_json, n_wells)
+  warning(hto_json_warn)
+  hto_warning_list <- c(hto_warning_list, hto_json_warn)
+}
+stm(paste0("IN HTO Processing JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
+cat(paste0("IN HTO Processing JSON Files        :\n\t", paste(all_hto_json, collapse = "\n\t")))
+
+# Read in all hto matrix files, check expected numbers vs input well info
+all_hto_mat <- list.files(path = in_hto, 
+                           pattern = "hto_count_matrix.csv.gz$", 
+                           full.names = TRUE, recursive = TRUE)
+n_hto_mat <- length(all_hto_mat)
+if(n_hto_mat == 0){
+  stop(sprintf("No 'hto_count_matrix.csv.gz' files found in %s", in_hto))
+} else if (n_hto_mat < n_wells){
+  hto_mat_warn <- sprintf("Input number of 'hto_count_matrix.csv.gz' files (%s) is fewer than number of wells (%s) in sample key",
+                           n_json, n_wells)
+  warning(hto_mat_warn)
+  hto_warning_list <- c(hto_warning_list, hto_mat_warn)
+}
+stm(paste0("IN HTO Matrix Files        :\n\t", paste(all_hto_mat, collapse = "\n\t")))  
+cat(paste0("IN HTO Matrix Files        :\n\t", paste(all_hto_mat, collapse = "\n\t")))  
+
+# Read in all hto metadata files, check expected numbers vs input well info
+all_hto_meta <- list.files(path = in_hto, 
+                           pattern = "hto_category_table.csv.gz$", 
+                           full.names = TRUE, recursive = TRUE)
+n_hto_meta <- length(all_hto_meta)
+if(n_hto_meta == 0){
+  stop(sprintf("No 'hto_category_table.csv.gz' files found in %s", in_hto))
+} else if (n_hto_meta < n_wells){
+  hto_meta_warn <- sprintf("Input number of 'hto_category_table.csv.gz' files (%s) is fewer than number of wells (%s) in sample key",
+                           n_json, n_wells)
+  warning(hto_meta_warn)
+  hto_warning_list <- c(hto_warning_list, hto_meta_warn)
+}
+stm(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
+cat(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
+
+```  
+
+```{r print_hto_warnings, eval = FALSE}
+# output warnings
+if(length(hto_warning_list) == 0){
+    hto_warning_list <- "None"
+}
+
+simple_html_table(labels = "File Warnings", values = paste(hto_warning_list, collapse = "<br>"), col_widths_px = c(120, 600))
+
+```
+
+```{r hto_meta_format}  
+stm("Reading in hto metadata .csv files")
+hto_meta_list <- lapply(all_hto_meta, fread)
+hto_meta_wells <- gsub("_.*","",basename(all_hto_meta))
+hto_meta_list <- mapply(function(x,y){x$well_id <- y; x}, hto_meta_list, hto_meta_wells, SIMPLIFY = F)
+hto_meta <- do.call(rbind, hto_meta_list)
+rm("hto_meta_list")
+
+hto_meta[in_hto_key, on = 'hto_barcode', hto_name := i.hto_name]  # merge in the hto names
+hto_meta[ , pool_id := gsub("C\\dW\\d","", well_id)]
+hto_meta[ , sample_hto:= sprintf("%s\n%s", hto_name, get(sample_column_name))]
+hto_meta[ , sample_hto_pool:= sprintf("%s\n%s%s", hto_name, get(sample_column_name), pool_id)]
+hto_meta[ , hto_order:=  as.numeric(gsub("HT","", hto_name))]
+hto_meta[ , sample_hto_pool:=  factor(sample_hto_pool, levels = unique(sample_hto_pool[order(pool_id, hto_order)]))]
+hto_meta[ , hto_order:= NULL]
+hto_meta[ , hto_category:= factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
+# hto_meta_list <- split(hto_meta, hto_meta$well_id)
+
+hto_meta_singlet <- subset(hto_meta, hto_category=="singlet")
+```
+
+```{r scrna_hash_read_json}
+# Read in json files
+stm("Reading in hto processing metrics json files")
+well_hto_json_list <- lapply(all_hto_json, read_hto_well_json)
+well_hto_json_df <- do.call(rbind, well_hto_json_list)
+well_hto_json_df <- well_hto_json_df %>% 
+  left_join(in_hto_key, by = "hto_barcode") %>% 
+  dplyr::mutate(pool_id_short = gsub(".*-", "", gsub("C.*","", well_id))) %>% 
+  dplyr::mutate(pool_id = gsub("C.*","", well_id)) %>% 
+  dplyr::mutate(sample_hto = paste(hto_name, get(sample_column_name), sep = "\n")) %>% 
+  dplyr::mutate(sample_hto = factor(sample_hto, levels = unique(sample_hto[order(hto_name, pool_id)]))) %>% 
+  dplyr::mutate(hto_name_barcode = paste(hto_name, hto_barcode, sep = "\n")) %>%  
+  dplyr::mutate(hto_name_barcode = factor(hto_name_barcode, levels = unique(hto_name_barcode[order(hto_name)]))) %>%
+  dplyr::mutate(sample_pool = paste(get(sample_column_name), pool_id_short, sep = "_")) %>% 
+  dplyr::mutate(sample_pool_hto = paste(sample_pool, hto_barcode, sep = "\n")) 
+
+remove("well_hto_json_list")
+```  
+
+
+```{r scrna_hash_read_hash}
+stm("Reading in hash matrixes from labeled h5 and multiplet h5 files")
+# read in as data.table, convert to data frame with hto barcodes as rownames
+hto_mat_list <- lapply(all_hto_mat, fread)
+
+stm("Formatting hto cutoff data")
+hto_mat_list <- lapply(hto_mat_list, data.frame, row.names=1)
+# name the list items by well
+hto_mat_wells <- gsub("_.*", "", basename(all_hto_mat))
+names(hto_mat_list) <-  hto_mat_wells
+# Join with metadata before merging well in case some cell barcodes are not unique
+hto_df_list <- lapply(hto_mat_wells, function(x){
+  mat <- data.frame(t(hto_mat_list[[x]]))
+  setDT(mat, keep.rownames = "barcodes")
+  to_melt <- setdiff(colnames(mat), "barcodes")
+  mat <- melt(mat, id.vars ="barcodes", variable.name ="hto", 
+                     value.name= "count",measure.vars = to_melt)
+  mat <- mat[hto_meta, on = c("barcodes"= "cell_barcode"), `:=`(pool_id= i.pool_id, well_id=i.well_id)]
+})
+all_hash_fmt <- do.call(rbind, hto_df_list)
+# Merge in metadata
+all_hash_fmt <- all_hash_fmt[hto_meta[,.(cell_barcode, well_id, pool_id, hto_barcode, hto_category)], 
+                             on =c("barcodes"="cell_barcode","well_id"="well_id","pool_id"="pool_id")]
+# Merge in well/hto level hashing info
+all_hash_fmt <- all_hash_fmt[well_hto_json_df, on = c(hto="hto_barcode", well_id="well_id", pool_id = "pool_id")]
+
+# Add variables for plotting hto distributions
+all_hash_fmt[, log_count := ifelse(count>0, log10(count), NA)] 
+all_hash_fmt[, log_cutoff := ifelse(is.na(log_count), NA, log10(cutoff))] 
+all_hash_fmt[, log_count_bin := cut(log_count, 
+                                      breaks = seq(min(log_count,na.rm=T), 
+                                                   max(log_count,na.rm=T), 
+                                                   length.out = 30))] 
+# Format labels as "hash not detected" for any well/hash that has no cells with hash count >5
+low_hto_cutoff <- 5
+all_hash_fmt[, n_count := sum(count > low_hto_cutoff), by = .(well_id, hto)]
+all_hash_fmt[, detected := n_count > 0] 
+all_hash_fmt[, plot_label := ifelse(detected, "", "Hash not detected")] 
+
+all_hash_fmt[, log_count := ifelse(detected, log_count, NA)]   # censor counts for plotting if overall hash not detected
+all_hash_fmt[, log_cutoff := ifelse(detected, log_cutoff, NA)]  # censor cutoffs for plotting if overall hash not detected 
+
+pools <- unique(all_hash_fmt$pool_id)
+n_pools <- length(pools)
+```  
+
+</details>  
+<!-- end of details section collapsing multiple no-output code blocks to save space -->
+
+<a id="hashtag_umi"></a>
+
+### Hash Tag UMI  
+
+HTO UMI counts have been pre-filtered based on cell barcode. Only barcodes associated with cells called by CellRanger are included.  
+
+<a id="pool_hto_umi_counts"></a>
+
+####  Pool HTO UMI Counts
+```{r umi_per_pool}
+stm("Output total hto umi per pool")
+pool_info <- all_hash_fmt %>%
+  dplyr::group_by(pool_id) %>%
+  dplyr::summarize(total_hto_umi = formatC(sum(count), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+  
+pool_info %>%
+  gt::gt() %>%
+  gt::cols_align(align = "right", columns = 2)
+
+```  
+
+<a id="well_hto_umi_counts"></a>
+
+####  Well HTO UMI Counts
+```{r all_hto_counts, results="asis"}
+stm("Output barplot total hto umi per pool")
+hash_by_well <- all_hash_fmt[,.(hto_count=sum(count)), 
+                             by = .(pool_id, well_id, hto, sample_pool_hto, hto_name_barcode)]
+
+g <- ggplot(hash_by_well, aes(well_id, hto_count)) +
+  geom_bar(stat="identity", fill = "blue") +
+  theme_bw() +
+  scale_y_continuous(labels = scales::comma) +
+  guides(fill=guide_legend(title="HTO")) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  xlab("Wells") +
+  ylab("Total HTO UMI") +
+  facet_wrap(~pool_id, ncol = n_pools, scales = "free_x", drop = TRUE)
+
+tempwidth <- max(n_samples*0.5 + n_pools*0.1 + 0.2, 4)
+
+
+make_subchunk(g, subchunk_name = "hto_totalumi_subchunk",quiet_knit = T,
+              chunk_opt_list = list(fig.width = tempwidth, fig.height = 3))
+
+```  
+
+[Return to Contents](#top_cell_hashing) 
+
+<a id="well_hto_umi_counts_hto"></a>
+
+####  Well HTO UMI Counts by HTO  
+```{r all_hto_counts_by_hto, , results="asis"}
+stm("Output barplot total hto umi per pool per hto")
+g2 <- qc_aligned_barplot_facet(hash_by_well, 
+                               category_x = "well_id", 
+                               name_x = "Wells", 
+                               category_y = "hto_name_barcode", 
+                               category_name = "hto", 
+                               stat = "identity", 
+                               variable_y_identity = "hto_count", 
+                               name_y = "HTO UMI Counts", 
+                               facet_formula = formula("~pool_id"), 
+                               scales = "free_x", 
+                               drop = TRUE)
+
+tempwidth2 <- n_samples*0.5 + n_pools*0.1 + 2.2
+
+make_subchunk(g2, subchunk_name = "hto_umibyhto_subchunk",quiet_knit = T,
+              chunk_opt_list = list(fig.width = tempwidth, fig.height = 6))
+
+```  
+
+[Return to Contents](#top_cell_hashing) 
+
+<a id="hto_parsing"></a>
+
+### HTO Parsing
+Showing number of cells positively associated with each hash tag for each well. Includes singlets and multiplets.  
+
+<a id="hto_positive_cells_well"></a>
+
+#### HTO Positive Cells per Well   
+```{r hto_positive_matrix, results="asis"}
+stm("Calculations for heatmap positive hto per well")
+# Expected HTO per well based on input sample sheet
+all_wells <- trimws(unique(unlist(strsplit(df_key$WellID, split = ";"))))
+all_hto <- in_hto_key$hto_name
+df_expected_hto <- expand.grid(well_id = all_wells, hto_name = all_hto) %>% 
+  left_join(in_hto_key, by = "hto_name")
+df_expected_hto$hto_expected <- mapply(function(x, y){any(grepl(x, df_key$WellID[df_key$HashTag == y]))},
+                                   df_expected_hto$well_id, 
+                                   df_expected_hto$hto_name)  
+
+
+# N Cells Pos HTO per well, defined as cells above cutoff
+df_expected_hto$n_positive_cells <- mapply(function(x, y){
+      well_hto_json_df$n_pos[which(well_hto_json_df$well_id == x & well_hto_json_df$hto_name == y)]
+    },
+    df_expected_hto$well_id, 
+    df_expected_hto$hto_name)
+df_expected_hto$n_positive_cells[df_expected_hto$n_positive_cells <= 5] <- NA  # change to NA to color undetected tiles uniquely
+if(is.list(df_expected_hto$n_positive_cells)){
+  b_missing <- sapply(df_expected_hto$n_positive_cells, function(x){length(x)==0})
+  b_not_missing <- !b_missing
+  v_n_pos <- numeric(nrow(df_expected_hto))
+  v_n_pos[b_not_missing] <- unlist(df_expected_hto$n_positive_cells[b_not_missing])
+  v_n_pos[b_missing] <- NA
+  df_expected_hto$n_positive_cells <- v_n_pos
+}
+
+# Flag for cells not detected
+df_expected_hto$hto_detection_status <-  mapply(function(x, y){
+      ifelse(x == TRUE & is.na(y),"Missing",
+             ifelse(x == TRUE & !is.na(y), "Detected",
+             ifelse(x == FALSE & is.na(y), "Not Used", NA)))
+    },
+    df_expected_hto$hto_expected, 
+    df_expected_hto$n_positive_cells)
+
+# Heat Map 
+# temp_scale <- scales::rescale(c(0, 5, 1, max(df_expected_hto$n_positive_cells)))
+stm("Output heatmap positive hto per well")
+hm_pos <- ggplot(df_expected_hto, aes(hto_name, y=factor(well_id, levels = sort(unique(well_id), decreasing = TRUE)))) +
+  geom_tile(aes(fill = n_positive_cells, color = factor(hto_detection_status, levels = c("Not Used", "Detected","Missing"))), 
+            width = 0.7, height = 0.7, size = 1) +
+  scale_fill_viridis_c(option = "D", na.value = "grey") +
+  scale_color_manual(name = "hto_detection_status", breaks = c("Not Used", "Detected","Missing"), values = c("grey","black","red"), drop = FALSE) +
+  scale_x_discrete(position = "top") +
+  xlab("HTO") +
+  ylab("Well") +
+  facet_grid(substr(well_id,1,7) ~., drop = T, scales = "free_y")
+
+if(!exists("n_wells")){
+  wells <- unlist(strsplit(unique(df_key$WellID), split = ";"))
+  n_wells <- length(wells)
+}
+
+temp_figheight <- n_wells*0.25 + 1
+temp_figwidth <- length(unique(df_expected_hto$hto_name))*0.4 + 2
+
+make_subchunk(hm_pos, subchunk_name="hto_positive_matrix_subchunk", quiet_knit = T, 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth))
+
+```   
+
+[Return to Contents](#top_cell_hashing) 
+  
+<a id="hto_distributions"></a>
+
+#### HTO Distributions
+
+
+A specific hashtag oligo (HTO) is detected in a well when >5 cells have any raw counts. Calculated cutoffs separate cells with
+background HTO count levels from cells considered positive for the HTO.  
+
+```{r hto_ridge_hist, class.output = "superbigimage", results = "asis"}
+stm("Plotting hto count ridgeplots")
+
+get_plt_ht_temp <- function(n_well_pool, n_hto, title_label_height = 0.5, row_height_constant = 3){
+    plot_height <- (n_well_pool*0.4 + row_height_constant)*ceiling(n_hto/7) + title_label_height
+    return(plot_height)
+}
+
+# Censor hto if detected in <= 5 cells in the well
+for (i in seq_along(pools)){
+  # pool data
+  df <- all_hash_fmt %>% 
+    dplyr::filter(pool_id == pools[i]) %>% 
+    dplyr::mutate(well_id = factor(well_id, levels = sort(unique(well_id), decreasing=T))) 
+  
+  # cutoff line segment
+  df_lines <- df %>%
+    dplyr::select(well_id, sample_hto, hto, cutoff, log_cutoff)  %>% 
+    dplyr::filter(!is.na(log_cutoff)) %>% 
+    dplyr::distinct() 
+  
+  # labels for hash not detected
+  detected_labels <- df %>% 
+    dplyr::select(well_id, hto, sample_hto, plot_label) %>% 
+  dplyr::distinct()
+  
+  x_max <- max(all_hash_fmt$log_count, na.rm = T)
+  x_min <- -0.1
+  x_label <- (x_max - x_min)/2 + x_min
+
+  # Plot
+  g_ridge <- ggplot(df, aes(x = log_count, y = well_id)) +
+    ggridges::geom_density_ridges(
+                                  scale = 7, 
+                                  stat = "binline",
+                                  binwidth = 0.1,
+                                  size = 0.5, # line width
+                                  aes(color = well_id), alpha = 0,
+                                  na.rm = TRUE) +
+    geom_segment(data = df_lines, aes(x = log_cutoff, xend = log_cutoff,
+                                      y = as.numeric(well_id), yend = as.numeric(well_id) + 0.9,
+                                      linetype = "well cutoff"), 
+                 color = "black", na.rm = TRUE) +
+    scale_x_continuous(limits = c(x_min, x_max)) +
+    scale_y_discrete(expand = c(0.01, 0)) +
+    scale_linetype_manual("cutoff",values=c("well cutoff"=1)) +
+    geom_text(data = detected_labels, x= x_label, 
+              aes(y= as.numeric(well_id),label = plot_label), 
+              size = 4, vjust = 0) +
+    facet_wrap(~sample_hto, ncol = 7) +
+    ggtitle(pools[i]) +
+    xlab("log10(Count)") +
+    ylab("Well ID") +
+    theme_bw() +
+    theme(axis.text.y = element_text(size = 12),
+          axis.title = element_text(size = 18),
+          plot.title = element_text(size = 24),
+          strip.text = element_text(size = 12),
+          legend.text = element_text(size = 12))
+  
+  # Set Height
+  temp_height <- get_plt_ht_temp(n_well_pool = length(unique(df$well_id)), n_hto = length(unique(df$hto)))
+  
+  # Output plot with custom chunk format
+  batchreporter::make_subchunk(g_ridge, subchunk_name = paste0("ridge_", i), 
+                chunk_opt_list = list(fig.height = temp_height, fig.width = 18, warning = FALSE), 
+                quiet_knit = TRUE)
+}
+
+```   
+
+[Return to Contents](#top_cell_hashing) 
+
+<a id="hto_cutoffs"></a>
+
+#### HTO Cutoffs  
+
+```{r hto_assignment, results = "asis"}
+stm("Plotting hto cutoff boxplots")
+g_cutoff_box <- ggplot(well_hto_json_df, aes(sample_hto, cutoff, color = hto_barcode)) +
+  suppressWarnings(geom_point(alpha = 0.4, position = position_jitter(height = 0, width = 0.3, seed = 20201112),
+             aes(text = sprintf("Well ID: %s",  well_id)))) +
+  geom_boxplot(alpha = 0, outlier.alpha = 1, color = "black") +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90)) +
+  facet_wrap(~pool_id, drop = TRUE, scales = "free_x", ncol = 2)+
+  ggtitle("Well-Specific HTO Cutoffs") 
+
+temp_figwidth <- (4*((n_pools>1)+1) + 3)
+temp_figheight <- ceiling(n_pools/2)*5 + 0.4
+
+ply_cutoff_box <- plotly::ggplotly(g_cutoff_box) %>% 
+  adjust_axis_title_spacing_plotly("x", adjustment = -1.3/temp_figheight) %>%
+  adjust_axis_title_spacing_plotly("y", adjustment = -0.5/temp_figwidth) %>% 
+  plotly::layout(xaxis = list(title = list(text = "", standoff = 30L)),
+                 yaxis = list(title = list(text = "", standoff = 20L))) 
+
+make_subchunk(ply_cutoff_box, subchunk_name = "hto_assignment_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+
+```  
+  
+[Return to  Top](#top_cell_hashing)  
+
+<a id="hto_positivity_rate"></a>
+
+#### HTO Positivity Rate
+  
+```{r hto_pos_cutoff, results = "asis"}
+stm("Plotting hto positive call box plots")
+g_cutoff_pos <- ggplot(well_hto_json_df, aes(sample_hto, frac_pos, color = hto_barcode)) +
+  suppressWarnings(geom_point(alpha = 0.4, position = position_jitter(height = 0, seed = 20201112),
+             aes(text = sprintf("Well ID: %s",  well_id)))) +
+  geom_boxplot(alpha = 0, outlier.alpha = 1, color = "black") +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90),
+                axis.title.x = element_text(margin = margin(c(15,0,1,0)))) +
+  facet_wrap(~pool_id, drop = TRUE, scales = "free_x", ncol = 2)+
+  ggtitle("Fraction Positive HTO Calls per Well")
+
+temp_figwidth <- (4*((n_pools>1)+1) + 3)
+temp_figheight <- ceiling(n_pools/2)*5 + 0.4
+
+ply_cutoff_pos <- plotly::ggplotly(g_cutoff_pos) %>% 
+  adjust_axis_title_spacing_plotly("x", adjustment = -1.3/temp_figheight) %>%
+  adjust_axis_title_spacing_plotly("y", adjustment = -0.5/temp_figwidth) %>% 
+  plotly::layout(xaxis = list(title = list(text = "", standoff = 30L)),
+                 yaxis = list(title = list(text = "", standoff = 20L))) 
+
+make_subchunk(ply_cutoff_pos, subchunk_name = "hto_positive_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+```  
+  
+[Return to Contents](#top_cell_hashing)  
+    
+<a id="hto_category_summary"></a>
+
+### HTO Category Summary
+
+<a id="pool_hashing_summary"></a>
+
+#### Pool Hashing Summary
+```{r scrna_hash_pool_summary}
+stm("Output pool based summary table")
+pool_summary <- hto_meta[ ,.(n_cells = .N),
+                          by = .(pool_id, hto_category)]
+setorder(pool_summary, pool_id, hto_category)
+pool_summary[, pct_cells := round(n_cells/sum(n_cells)*100,1), by = pool_id]
+setcolorder(pool_summary, c("pool_id", "hto_category", "n_cells", "pct_cells"))
+
+qc_table(pool_summary)
+
+```   
+[Return to Contents](#top_cell_hashing) 
+
+<a id="hto_category_well"></a>
+
+#### HTO Category Counts by Well   
+
+```{r hto_cat_counts, class.output = "superbigimage",results = "asis"}
+stm("Plotting hto category counts per well")
+
+g <- qc_aligned_barplot_facet(hto_meta,
+                   category_x = "well_id",
+                   name_x = "Well ID",
+                   category_y = "hto_category",
+                   category_name = "HTO Category",
+                   colorset_y = "varibow",
+                   name_y = "N Cells",
+                   padding = 0.2, 
+                   facet_formula = formula("~pool_id"), nrow = 1, scales = "free_x")
+
+temp_figwidth <-  max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
+temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+  
+```  
+  
+[Return to Contents](#top_cell_hashing)  
+  
+<a id="hto_category_fraction_well"></a>
+    
+### HTO Category Fraction by Well  
+
+```{r hto_cat_fractions, class.output = "superbigimage", results="asis"}
+stm("Plotting hto category fraction per well")
+
+g <- qc_stacked_barplot_facet(hto_meta,
+                       category_x = "well_id",
+                       name_x = "Well ID",
+                       category_y = "hto_category",
+                       category_name = "HTO Category",
+                       colorset_y = "varibow",
+                       name_y = "Fraction of Cells",
+                       as_fraction = TRUE, facet_formula = formula("~pool_id"), ncol=2, scales = "free_x") 
+
+temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
+temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+make_subchunk(g, subchunk_name = "hto_cat_fraction_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+  
+```
+
+[Return to Contents](#top_cell_hashing)  
+
+<a id="singlet_section_well"></a>
+
+### Singlet Summaries (well-based)  
+
+<a id="well_singlet_summary"></a>
+
+#### Well-Based Summary  
+
+<details>  
+  <summary>Expand data table of summary stats by well </summary>  
+  
+```{r scrna_hash_well_summary}
+well_summary <- hto_meta[ ,.(n_cells = .N),
+                          by = .(pool_id, well_id, hto_category)]
+well_summary[, pct_cells := round(n_cells/sum(n_cells)*100,1), by = c("pool_id", "well_id")]
+setorder(well_summary, pool_id, well_id, hto_category)
+
+qc_table(well_summary)
+
+```   
+
+[Return to Contents](#top_cell_hashing) 
+
+</details> 
+
+<a id="hto_barcode_well"></a>
+
+#### HTO Barcode Count per Well Plot  
+
+```{r hto_counts_well, class.output = "superbigimage", results="asis"}
+stm("Plotting barcode count per well and hto")
+
+g <- qc_aligned_barplot_facet(meta = hto_meta_singlet,
+                   category_x = "well_id",
+                   name_x = "Well ID",
+                   category_y = "sample_hto_pool",
+                   category_name = "HTO/Sample",
+                   colorset_y = "varibow",
+                   name_y = "Number of Cells",
+                   padding = 0.2,
+                   facet_formula = formula("~pool_id"), nrow = 1, scales = "free", drop = TRUE) 
+
+# g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+
+temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 2, 4)
+temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+batchreporter::make_subchunk(g, subchunk_name = "hto_cat_count_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+
+```   
+  
+[Return to Contents](#top_cell_hashing)  
+
+<a id="hto_barcode_fraction_well"></a>
+  
+#### HTO Barcode Fraction per Well Plot  
+
+```{r hto_fraction_well, class.output = "superbigimage", results="asis"}
+stm("Plotting barcode fraction per well and hto")
+
+g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
+                   category_x = "well_id",
+                   name_x = "Well ID",
+                   category_y = "sample_hto_pool",
+                   category_name = "HTO/Sample",
+                   colorset_y = "varibow",
+                   name_y = "Fraction of Cells",
+                   as_fraction = TRUE, 
+                   facet_formula = formula("~pool_id"), nrow = 1, scales = "free_x") +
+    theme(text = element_text(size = 12))
+
+temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
+temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+batchreporter::make_subchunk(g, subchunk_name = "hto_fraction_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+  
+```  
+  
+[Return to Contents](#top_cell_hashing)  
+
+<a id="singlet_section_hto"></a>
+
+### Singlet Summaries (hash-based)  
+
+<a id="hto_singlet_summary"></a>
+
+#### Hash-Based Summary  
+
+<details>  
+  <summary>Expand data table of summary stats by hash tag </summary>  
+  
+```{r hash_singlet_summary}
+stm("Output pool based summary table")
+hto_singlet_summary <- hto_meta_singlet[ ,.(n_singlet_cells = .N),
+                             by = setNames(list(pool_id, hto_name, hto_barcode, get(sample_column_name)), c('pool_id', 'hto_name','hto_barcode', sample_column_name))]
+setorder(hto_singlet_summary, pool_id, hto_name)
+setcolorder(hto_singlet_summary, c("pool_id",sample_column_name, "hto_name", "hto_barcode", "n_singlet_cells"))
+
+qc_table(hto_singlet_summary)
+
+```  
+  
+[Return to Contents](#top_cell_hashing)  
+
+</details>  
+
+<a id="well_hto_barcode"></a> 
+
+#### Well Count per HTO Barcode Plot  
+
+```{r Well Count By HTO Barcode Plot, class.output = "superbigimage", results="asis"}
+stm("Plotting well count per hto")
+
+plot_list <- list()
+for (i in seq_along(pools)){
+  plot_list[[i]] <- qc_aligned_barplot_facet(meta = hto_meta_singlet[pool_id == pools[i],],
+                   category_x = "sample_hto_pool",
+                   category_y = "well_id",
+                   category_name = "Well ID",
+                   name_x = "HTO/Sample",
+                   colorset_y = "varibow",
+                   name_y = "Number of Cells",
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) 
+}
+
+g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+temp_figwidth <- max(0.6*n_wells + 1*n_pools + 3, 8)
+temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+batchreporter::make_subchunk(g, subchunk_name = "well_count_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE, class.output = "superbigimage"), 
+              quiet_knit = TRUE)
+
+```  
+  
+[Return to Contents](#top_cell_hashing)  
+  
+<a id="well_fraction_hto_barcode"></a> 
+
+#### Well Fraction per HTO Barcode Plot  
+```{r Well Fraction By HTO Barcode Plot, class.output = "superbigimage", results="asis"}
+stm("Plotting well fraction per hto")
+
+g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
+                   category_x = "sample_hto_pool",
+                   category_y = "well_id",
+                   category_name = "Well ID",
+                   name_x = "HTO/Sample",
+                   colorset_y = "varibow",
+                   name_y = "Fraction of Cells",
+                   as_fraction = TRUE , 
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE)
+
+temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
+temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+batchreporter::make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)
+
+```  
+  
+[Return to Contents](#top_cell_hashing)  
+
+---  
+
+HTO batch module v.`r {hto_module_version}`, Lauren Okada  
+

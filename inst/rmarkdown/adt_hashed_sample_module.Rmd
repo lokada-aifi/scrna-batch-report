@@ -1,0 +1,118 @@
+<a id="adt_hash_top"></a>  
+
+```{r adt_hash_setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+adt_hashed_module_version <- "1.0.0"
+```  
+
+#### Contents  
+
+##### [Session Preparation](#hashed_adt_session_prep)   
+##### [Violin Plot](#hashed_adt_sample_violin)  
+
+<a id="hashed_adt_session_prep"></a>  
+
+#### Session Preparation  
+
+##### Load Libraries
+```{r adt_hash_load_sample libraries}
+quiet_library <- function(...) {
+  suppressPackageStartupMessages(library(...))
+}
+quiet_library(ggplot2)
+quiet_library(Seurat)
+quiet_library(viridis)
+quiet_library(dplyr)
+quiet_library(plyr)
+quiet_library(data.table)
+```
+
+##### Locate input files
+```{r adt_hash_locate_sample_input_files}
+# Input directories in_adt and in_hto should be defined in the parent Rmarkdown report.
+
+# For testing purposes
+if(is.null(in_adt)) {
+  warning("No input directory for adt batch report, defaulting to test data")
+  in_adt <- system.file("extdata/X070/adt", package = "batchreporter")
+} 
+if(is.null(in_hto)) {
+  warning("No input directory for hto batch report, defaulting to test data")
+  in_hto <- system.file("extdata/X070/hto", package = "batchreporter")
+} 
+
+#create lists for future mapply functions
+adt_count_filepaths <- list.files(in_adt, pattern = "tag_counts.csv", full.names = T)
+
+hto_category_filepaths <- list.files(in_hto, pattern = "hto_category_table.csv.gz", full.names = T)
+```
+
+```{r adt_hash_check_inputs}
+# Check input files
+if(length(adt_count_filepaths) == 0) {
+  stop("Can't find tag_counts.csv files for hashed ADT module processing. Check input 'adt' subdirectory for *tag_counts.csv files.")
+}
+if(length(hto_category_filepaths) == 0) {
+  stop("Can't find hto_category_table.csv.gz files for hashed ADT module processing. Check input 'hto' subdirectory for *hto_category_table.csv.gz files.")
+}
+
+
+cat(sprintf("IN ADT Tag Count files: \n\t%s", paste(adt_count_filepaths, collapse = "\n\t")), sep = "\n")
+stm(sprintf("IN ADT Tag Count files: \n\t%s", paste(adt_count_filepaths, collapse = "\n\t")))  
+
+cat(sprintf("IN HTO Category files: \n\t%s", paste(hto_category_filepaths, collapse = "\n\t")), sep = "\n")
+stm(sprintf("IN HTO Category files: \n\t%s", paste(hto_category_filepaths, collapse = "\n\t")))
+
+
+```
+
+##### Load Inputs  
+
+<details style="color: lightgray;">  
+  <summary>Expand output</summary>   
+  
+```{r adt_hash_load_sample inputs, message=F, echo=F}
+count_list <- lapply(adt_count_filepaths, fread)
+hto_list <- lapply(hto_category_filepaths, fread)
+
+```  
+</details>  
+  
+##### Subset singlets from ADT count matrix using HTO category table & combine into single DF
+```{r adt_hash_Subset singlets per well, message=F, echo=F}
+i = 1
+while (i < length(count_list) + 1){
+  temp_hto <- as.data.frame(hto_list[i])
+  temp_singlets <- subset(temp_hto, subset = temp_hto$hto_category == 'singlet')
+  temp_adts <- as.data.frame(count_list[i])
+  temp_adt_singlets <- subset(temp_adts, subset = temp_adts$V1 %in% temp_singlets$cell_barcode)
+  rownames(temp_adt_singlets) <- temp_adt_singlets$V1
+  temp_adt_singlets <- temp_adt_singlets[,2:length(colnames(temp_adt_singlets))]
+  temp_adt_singlets$total <- rowSums(temp_adt_singlets)
+  temp_adt_singlets$cell_barcode <- rownames(temp_adt_singlets)
+  temp_adt_singlets <- merge(temp_adt_singlets, temp_singlets, by = "cell_barcode")
+  count_list[[i]] <- temp_adt_singlets
+  i = i +1
+}
+
+combined_df <- bind_rows(count_list, .id = "column_label")
+```  
+<a id="hashed_adt_sample_violin"></a> 
+
+#### Violin Plot
+```{r adt_hash_violin plots by sample}
+violin_plot <- ggplot(combined_df, aes(x = pbmc_sample_id, y = total, fill=pbmc_sample_id)) + 
+  geom_violin() + 
+  scale_y_log10() + 
+  ggtitle('ADT UMIs by Sample')
+violin_plot + 
+  stat_summary(fun=median, geom = "point", color="black") + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  geom_hline(yintercept=1000, linetype="dashed", color = "blue") + 
+  geom_hline(yintercept=300, linetype="solid", color = "red")
+```  
+[Return to Contents](#adt_hash_top) 
+
+---  
+
+Hashed ADT batch module v.`r {adt_hashed_module_version}`, Zach Thomson

@@ -1,0 +1,230 @@
+<a id="adt_top"></a>  
+
+```{r adt_setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+adt_module_version <- "1.0.0"
+
+stm("Beginning ADT module")
+```  
+
+#### Contents
+
+##### [Session Preparation](#adt_session_prep)  
+##### [Split Violin Plot](#adt_split_violin_plot)  
+##### [UMAP clustering for ADTs](#adt_well_umap_clustering) 
+- [UMAP clustering for ADTs by Well](#adt_umap_bywell) 
+- [UMAP clustering for ADTs by ADT](#adt_umap_byadt)  
+
+##### [ADT UMIs plot](#adt_well_umi_plot)
+
+<a id="adt_session_prep"></a>
+  
+#### Session Preparation  
+
+<details style="color: lightgray;">  
+  <summary>Expand output</summary>   
+  
+##### Load Libraries
+```{r adt_load libraries}
+quiet_library <- function(...) {
+  suppressPackageStartupMessages(library(...))
+}
+quiet_library(ggplot2)
+quiet_library(Seurat)
+quiet_library(viridis)
+quiet_library(dplyr)
+quiet_library(plyr)
+quiet_library(data.table)
+```
+
+##### Locate input files
+```{r adt_locate input files}
+stm("Identifying files for ADT analysis")
+
+# Input directory in_adt should be defined in the parent Rmarkdown report.
+if(is.null(in_adt)) {
+  warning("No input directory for adt batch report, defaulting to test data")
+  in_adt <- system.file("extdata/X070/adt", package = "batchreporter")
+} 
+
+adt_count_files <- list.files(in_adt,
+                              pattern = "Tag_Counts.csv")
+
+well_names <- gsub('.{15}$', '', adt_count_files)
+
+adt_count_filepaths <- list.files(in_adt, pattern = "Tag_Counts.csv", full.names = T)
+adt_pos_count_filepaths <- list.files(in_adt, pattern = "positive_tag_counts.csv", full.names = T)
+adt_pos_count_files <- basename(adt_pos_count_filepaths)
+
+cat(sprintf("IN ADT Tag Count files: \n\t%s", paste(adt_count_files, collapse = "\n\t")), sep = "\n")
+stm(sprintf("IN ADT Tag Count files: \n\t%s", paste(adt_count_files, collapse = "\n\t")))  
+
+cat(sprintf("IN POSITIVE ADT Tag Count files: \n\t%s", paste(adt_pos_count_files, collapse = "\n\t")), sep = "\n")
+stm(sprintf("IN POSITIVE ADT Tag Count files: \n\t%s", paste(adt_pos_count_files, collapse = "\n\t")))
+
+```
+
+##### Load Inputs  
+<details style="color: lightgray;"> 
+  <summary>Expand output</summary>   
+```{r adt_load inputs, message=F, echo=F}
+count_list <- lapply(adt_count_filepaths, fread)
+pos_count_list <- lapply(adt_pos_count_filepaths, fread)
+pos_count_list <- lapply(pos_count_list, function(x){
+  colnames(x)[1] <- "cell_barcode"
+  x
+})
+```  
+
+
+#### Create pos & neg droplet matrices, then create seurat objects
+```{r adt_Create Seurat Objects, message=F, echo=F}
+i = 1
+seurat_list <- list()
+while (i < length(count_list) + 1){
+  # get top 50k negative droplets
+  diff_bcs <- setdiff(count_list[[i]]$cell_barcode, pos_count_list[[i]]$cell_barcode)
+  neg <- subset(count_list[[i]], subset = count_list[[i]]$cell_barcode %in% diff_bcs)
+  neg <- data.frame(neg)
+  neg_50k <- neg[order(neg$total, decreasing = T),]
+  neg_50k <- neg_50k[1:50000,]
+  rownames(neg_50k) <- neg_50k$cell_barcode
+  
+  # get positive cell droplets
+  pos_subset <- subset(count_list[[i]], subset = count_list[[i]]$cell_barcode %in% pos_count_list[[i]]$cell_barcode)
+  pos_subset <- data.frame(pos_subset)
+  rownames(pos_subset) <- pos_subset$cell_barcode
+  
+  # create seurat objects and merge
+  pos_so <- CreateSeuratObject(counts = t(pos_subset[3:length(colnames(pos_subset))]), project = 'Cells')
+  neg_so <- CreateSeuratObject(counts = t(neg_50k[3:length(colnames(neg_50k))]), project = 'Empty Droplets')
+  so_merge <- merge(pos_so, neg_so)
+  so_merge[['well']] <- rep(well_names[i], length(so_merge@assays$RNA))
+  
+  # add merged object to list
+  seurat_list[[i]] <- so_merge
+  
+  # proceed to next one
+  i = i + 1
+}
+
+```  
+
+#### Merge Seurat Objects
+```{r adt_merge seurat objects}  
+# all_merge <- Reduce(merge,seurat_list)
+
+merge_seurat <- function(so_list){
+  if (length(so_list) > 2){
+    temp <- merge(x = so_list[[1]], y = so_list[[2]])
+    i = 3
+    while (i < length(so_list) + 1){
+      temp <- merge(x = temp, y = so_list[[i]])
+      i = i + 1
+    }
+    return(temp)
+  }
+  else{
+    temp <- merge(x = so_list[[1]], y = so_list[[2]])
+  }
+  return(temp)
+}
+
+all_merge <- merge_seurat(seurat_list)
+```  
+</details>  
+
+<a id="adt_session_prep"></a>  
+
+#### Split Violin Plot
+```{r adt_split violin plot, fig.width=12, fig.height=8, message=F, echo=F}
+VlnPlot(all_merge, features = 'nCount_RNA', log = T, 
+        pt.size = 0, split.plot = T, split.by = 'orig.ident', group.by = 'well') & 
+  geom_hline(yintercept=1000, linetype="dashed", color = "blue") &
+  geom_hline(yintercept=300, linetype="solid", color = "red") & stat_summary(fun=median, geom="point", size=2, color="green") &
+  ggtitle("Count_ADT")
+```  
+
+[Return to Contents](#adt_top) 
+
+<a id= "adt_well_umap_clustering"></a>  
+
+#### UMAP clustering for ADTs
+```{r adt_UMAP Clustering for ADTs, message=F, echo=F}
+all_merge <- SetIdent(all_merge, value = 'orig.ident')
+adt_positives <- subset(all_merge, idents = 'Cells')
+VariableFeatures(adt_positives) <- rownames(adt_positives)
+
+if (length(rownames(adt_positives)) > 30) {
+  dims = 30
+} else {
+  dims = length(rownames(adt_positives)) - 1
+}
+
+
+adt_positives <- NormalizeData(adt_positives, normalization.method = 'CLR', margin = 2) %>% 
+  ScaleData() %>% RunPCA(npcs = dims)
+adt_positives <- RunUMAP(adt_positives, dims = 1:(dims)) %>% FindNeighbors(dims = 1:dims) %>% FindClusters()
+
+```  
+
+<a id = "adt_umap_bywell"></a>  
+
+##### UMAP clustering ADTs by Well
+```{r adt_UMAP clustering ADTs by Well, fig.width=8, fig.height=8}
+DimPlot(adt_positives, group.by = 'well')
+```  
+
+[Return to Contents](#adt_top) 
+
+```{r adt_dynamically scale adt umap height}
+n_features <- length(rownames(adt_positives))
+height = ceiling((n_features / 3) * 2)
+```  
+
+<a id = "adt_umap_byadt"></a>  
+
+##### UMAP clustering for ADTs individually
+```{r adt_UMAP clustering for ADTs individually, fig.width=12, fig.height=height, message=F, echo=F}
+FeaturePlot(adt_positives, features = rownames(adt_positives), min.cutoff = 'q03', max.cutoff = 'q97') & 
+  scale_color_viridis(option = 'inferno')
+```  
+[Return to Contents](#adt_top)  
+
+#### ADT UMIs Dataframe construction - start here  
+```{r ADT UMIs dataframe construction}
+i = 1
+colsums_list <- list()
+while (i < length(count_list) + 1){
+  temp_adt_so <- seurat_list[[i]]
+  temp_adt_so <- SetIdent(temp_adt_so, value = 'orig.ident')
+  temp_adt_positives <- subset(temp_adt_so, idents = 'Cells')
+  temp_adt_pos_mtx <- t(data.frame(temp_adt_positives@assays$RNA@counts))
+  colsums_df <- data.frame(colSums(temp_adt_pos_mtx))
+  colnames(colsums_df) <- 'Count'
+  colsums_df$ADT <- rownames(colsums_df)
+  colsums_df$Well <- rep(well_names[[i]], length(rownames(colsums_df)))
+  colsums_list[[i]] <- colsums_df
+  i = i + 1
+}
+
+combined_colsums <- bind_rows(colsums_list, .id = "column_label")
+```  
+  
+<a id= "adt_well_umi_plot"></a>  
+  
+#### ADT UMIs plot
+```{r ADT UMIs plot, fig.width=12, fig.height=8}
+ggplot(combined_colsums, aes(x = reorder(ADT, -Count), y = Count, color = Well)) + geom_point(size = 5) + 
+  geom_hline(yintercept=median(combined_colsums$Count), linetype="dashed", color = "blue") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_log10() 
+
+ggplot(combined_colsums, aes(x = reorder(ADT, -Count), y = Count, color = Well)) + geom_point(size = 5) + 
+  geom_hline(yintercept=median(combined_colsums$Count), linetype="dashed", color = "blue") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  
+```  
+[Return to Contents](#adt_top) 
+
+---  
+
+ADT report module v.`r {adt_module_version}`, Zach Thomson
