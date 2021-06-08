@@ -73,7 +73,8 @@ To run scripts, clone the GitHub repository and run the desired wrapper script w
 
 ## Available Reports and Scripts 
 Available batch reports are as follows:
-- [scRNA cell hashing batch report](#scrna_batch_report): Batch report for stand alone scRNA Cell-Hashing + labeling pipelines, run post-labeling
+- [scRNA cell hashing batch report](#scrna_batch_report): Batch report for stand alone scRNA Cell-Hashing + labeling pipelines, run post-labeling  
+- [NGS batch report](#ngs_batch_report): Batch QC report intended to summarize data quality for pipeline "approval" steps. Can be used to summarize multiome data in a single report for any combination of supported single cell modalities.  Run on well-level data after initial processing steps.  
 
 [Return to Contents](#contents)  
 
@@ -302,7 +303,7 @@ git clone https://github.com/aifimmunology/scrna-batch-qc.git
 Rscript --vanilla \
     /home/jupyter/batchreporter/run-ngs-batch-qc.R \
     -b X070  \
-    -m hto;scrna;scatac;adt \
+    -m 'hto;scrna;scatac;adt' \
     -i /home/jupyter/test_data/X070 \
     -k /home/jupyter/test_data/X070/sample_key_X070.csv   \
     -c /home/jupyter/local.lib/batchreporter/extdata/default_rna_config_v1.csv  \
