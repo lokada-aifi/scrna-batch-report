@@ -334,7 +334,7 @@ For example, using the example TEA run above, we would get the following outputs
 
 #### Tests
 
-Test runs can be performed using datasets provided with the `batchreporter` package using `-b X070`. These require only the `-t` and `-o` parameters.
+Test runs can be performed using datasets provided with the `batchreporter` package using `-b X070`. These require only the `-t`,`-d`, and `-o` parameters.
 
 ##### Hashed TEA-seq Example
 The default test is a hashed TEA-seq run of experimental batch X070, which consists of 6 samples run across 3 wells.
@@ -342,6 +342,7 @@ The default test is a hashed TEA-seq run of experimental batch X070, which consi
 Rscript --vanilla \
     /home/jupyter/batchreporter/run-ngs-batch-qc.R \
     -b X070  \
+    -d /home/jupyter/testoutput  \
     -o X070_ngs_batch_report_testoutput-hashedTEAseq.html \
     2>&1 | tee /home/jupyter/test_output/X070_ngs-batch-report_test-hash_log.txt
 ```  
