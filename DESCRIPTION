@@ -27,7 +27,7 @@ Imports:
   scales,
   H5weaver (>= 1.0.20),
   HTOparser (>= 1.0.12),
-  ATAComb (>=0.2.2),
+  ATAComb (>= 0.2.2),
   parallel,
   rhdf5,
   jsonlite,
