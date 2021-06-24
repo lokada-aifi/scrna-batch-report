@@ -28,6 +28,7 @@ Imports:
   H5weaver (>= 1.0.20),
   HTOparser (>= 1.0.12),
   ATAComb (>= 0.2.2),
+  viridis,
   parallel,
   rhdf5,
   jsonlite,

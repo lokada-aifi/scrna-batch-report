@@ -82,13 +82,23 @@ pos_count_list <- lapply(pos_count_list, function(x){
 i = 1
 seurat_list <- list()
 while (i < length(count_list) + 1){
-  # get top 50k negative droplets
+  # get top 50k negative droplets (or all negative droplets if fewer detected)
   diff_bcs <- setdiff(count_list[[i]]$cell_barcode, pos_count_list[[i]]$cell_barcode)
+  n_neg <- min(length(diff_bcs), 50000)
   neg <- subset(count_list[[i]], subset = count_list[[i]]$cell_barcode %in% diff_bcs)
   neg <- data.frame(neg)
   neg_50k <- neg[order(neg$total, decreasing = T),]
-  neg_50k <- neg_50k[1:50000,]
-  rownames(neg_50k) <- neg_50k$cell_barcode
+  neg_50k <- neg_50k[1:n_neg,]
+  if(n_neg > 0){
+    rownames(neg_50k) <- neg_50k$cell_barcode
+    if(n_neg < 50000){
+      print(sprintf("Warning: Fewer than 50000 (%s) negative ADT droplets identified for file %s", n_neg, adt_count_filepaths[i]))
+      stm(sprintf("Warning: Fewer than 50000 (%s) negative ADT droplets identified for file %s", n_neg, adt_count_filepaths[i]))
+    }
+  } else {
+    print(sprintf("Warning: No negative ADT droplets identified for %s", adt_count_filepaths[i]))
+    stm(sprintf("Warning: No negative ADT droplets identified for %s", adt_count_filepaths[i]))
+  }
   
   # get positive cell droplets
   pos_subset <- subset(count_list[[i]], subset = count_list[[i]]$cell_barcode %in% pos_count_list[[i]]$cell_barcode)
@@ -112,25 +122,8 @@ while (i < length(count_list) + 1){
 
 #### Merge Seurat Objects
 ```{r adt_merge seurat objects}  
-# all_merge <- Reduce(merge,seurat_list)
+all_merge <- Reduce(merge, seurat_list)
 
-merge_seurat <- function(so_list){
-  if (length(so_list) > 2){
-    temp <- merge(x = so_list[[1]], y = so_list[[2]])
-    i = 3
-    while (i < length(so_list) + 1){
-      temp <- merge(x = temp, y = so_list[[i]])
-      i = i + 1
-    }
-    return(temp)
-  }
-  else{
-    temp <- merge(x = so_list[[1]], y = so_list[[2]])
-  }
-  return(temp)
-}
-
-all_merge <- merge_seurat(seurat_list)
 ```  
 </details>  
 
