@@ -272,8 +272,10 @@ meta_hto <- meta %>%
     dplyr::rename(pbmc_sample_id_old = pbmc_sample_id) %>%
     dplyr::rename(atac_well_id = well_id) %>%
     dplyr::mutate(atac_pool_id = gsub("C.*", "", atac_well_id)) %>%
-    dplyr::left_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id")) %>%
-    dplyr::mutate(pool_id=ifelse(is.na(pool_id), gsub("-A","-", atac_pool_id),pool_id))
+    dplyr::left_join(hto_meta, 
+                     by = c("original_barcodes"="atac_original_barcodes", "atac_well_id"),
+                     suffix = c("_atac","")) %>%  # use suffix in case there are additional column overlaps in the future. 
+    dplyr::mutate(pool_id=ifelse(is.na(pool_id), gsub("-A","-", atac_pool_id), pool_id))
 
 meta_singlet <- meta_hto %>%
     filter(hto_category == "singlet")
@@ -283,7 +285,9 @@ meta_hto_full <- meta %>%
     dplyr::rename(pbmc_sample_id_old = pbmc_sample_id) %>%
     dplyr::rename(atac_well_id = well_id) %>%
     dplyr::mutate(atac_pool_id = gsub("C.*", "", atac_well_id)) %>%
-    dplyr::full_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id")) %>%
+    dplyr::full_join(hto_meta, 
+                     by = c("original_barcodes"="atac_original_barcodes", "atac_well_id"), 
+                     suffix = c("_atac","")) %>%
     dplyr::mutate(hto_category = factor(hto_category, levels = c(hto_cat_levels, "hto_missing"))) %>%
     dplyr::mutate(hto_category = replace_na(hto_category, replace="hto_missing")) %>%
     dplyr::mutate(barcode_category = replace_na(barcode_category, replace="atac_missing")) %>%
@@ -300,7 +304,8 @@ stm("Merging hto data with filtered ATAC metadata")
 filtered_meta_hto <- filtered_meta %>%
     dplyr::rename(pbmc_sample_id_old = pbmc_sample_id) %>%
     dplyr::rename(atac_well_id = well_id) %>%
-    dplyr::left_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id")) 
+    dplyr::left_join(hto_meta, by = c("original_barcodes"="atac_original_barcodes", "atac_well_id"),
+                     suffix = c("_atac", "")) 
 
 filtered_meta_singlet <- filtered_meta_hto %>%
     dplyr::filter(hto_category == "singlet")  

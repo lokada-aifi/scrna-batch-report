@@ -1,6 +1,6 @@
 Package: batchreporter
 Title: Batch QC Summary Reports for AIFI Pipeline Data
-Version: 1.1.0
+Version: 1.1.1
 Authors@R: 
     person(given = "Lauren",
            family = "Okada",
