@@ -1,7 +1,7 @@
 <a id="scatac_hashing_contents"></a>  
 
 ```{r, include = FALSE}  
-scatac_hashing_module_version <- "1.0.0"
+scatac_hashing_module_version <- "1.0.1"
 ```  
 
 ### Contents
