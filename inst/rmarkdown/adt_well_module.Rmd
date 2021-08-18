@@ -2,7 +2,7 @@
 
 ```{r adt_setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-adt_module_version <- "1.0.0"
+adt_module_version <- "1.0.1" #20210818
 
 stm("Beginning ADT module")
 ```  
@@ -53,7 +53,14 @@ adt_count_files <- list.files(in_adt,
 well_names <- gsub('.{15}$', '', adt_count_files)
 
 adt_count_filepaths <- list.files(in_adt, pattern = "Tag_Counts.csv", full.names = T)
+if(length(adt_count_filepaths) == 0){
+  stop(sprintf("No 'Tag_Counts.csv' files (BarCounter output) found in %s", in_adt))
+}
+
 adt_pos_count_filepaths <- list.files(in_adt, pattern = "positive_tag_counts.csv", full.names = T)
+if(length(adt_pos_count_filepaths) == 0){
+  stop(sprintf("No 'positive_tag_counts.csv' files (ADT well QC output) found in %s", in_adt))
+}
 adt_pos_count_files <- basename(adt_pos_count_filepaths)
 
 cat(sprintf("IN ADT Tag Count files: \n\t%s", paste(adt_count_files, collapse = "\n\t")), sep = "\n")

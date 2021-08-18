@@ -1,7 +1,7 @@
 <a id="rna_hashing_top"></a>   
 
 ```{r}
-scrna_seq_sample_module_version <- "1.0.0"
+scrna_seq_sample_module_version <- "1.0.1" #20210818
 ```
 
 
@@ -247,6 +247,55 @@ rna_counts_sampled <- do.call(cbind, rna_count_list_sampled)
 rm(list=c("rna_count_list", "rna_count_list_sampled","rna_meta_list"))
 
 ```  
+
+Logic Check sample sheet value formats against data value formats
+```{r hto_rna_check_ss_format}
+all_pools_same <- identical(sort(pools), sort(unique(hto_meta$pool_id)))
+if(!all_pools_same){
+  intersect_pool <- intersect(pools, unique(hto_meta$pool_id))
+  if(length(intersect_pool) == 0){
+    stop(sprintf("Pool ID values in sample sheet [%s] do not match pool id values in data [%s].",
+                 paste(pools, collapse = ";"), 
+                 paste(sort(unique(hto_meta$pool_id)),collapse = ";")))
+  }
+  diff_sheet_pool <- setdiff(pools, unique(hto_meta$pool_id))
+  if(length(diff_sheet_pool) >1){
+    stm(sprintf("Warning: The following Pool values in sample sheet [%s] are not found in the hash tag data", 
+        paste(diff_sheet_pool, collapse = ";")))
+  }
+  diff_data_pool <- setdiff( unique(hto_meta$pool_id),pools)
+    if(length(diff_data_pool) >1){
+      stm(sprintf("Warning: The following Pool values in the hash tag data [%s] are not found in the sample sheet.", 
+        paste(diff_data_pool, collapse = ";")))
+  }
+}
+
+stm(sprintf("Sampling %s cells per sample and well (or all cells if fewer)", n_cells_sample))
+
+set.seed(3)
+sample_index_list <- lapply(hto_meta_singlet_list, function(x){
+  sample_size = min(n_cells_sample, nrow(x))
+  sort(sample(1:nrow(x), size = sample_size, replace = FALSE))
+})
+
+n_files <- length(sample_index_list)
+rna_meta_list_sampled <- lapply(1:n_files, function(x){
+ hto_meta_singlet_list[[x]][sample_index_list[[x]],]
+})  
+
+rna_count_list_sampled <- lapply(1:n_files, function(x){
+ rna_counts[, rna_meta_list_sampled[[x]]$barcodes]
+})
+
+rna_meta_sampled <- do.call(rbind, rna_meta_list_sampled)
+rna_meta_sampled$fct_mito_umi <- rna_meta_sampled$n_mito_umi/rna_meta_sampled$n_umis
+rna_meta_sampled$fct_mito_group <- cut(rna_meta_sampled$fct_mito_umi, breaks =fct_mito_grp_cutoffs,
+                           labels = fct_mito_grp_labels)
+rna_counts_sampled <- do.call(cbind, rna_count_list_sampled)
+
+rm(list=c("rna_count_list", "rna_count_list_sampled","rna_meta_list"))
+
+``` 
   
 </details>  
   
@@ -333,7 +382,15 @@ batchreporter::make_subchunk(g, subchunk_name = "scrna_sample_fraction_subchunk"
 ### Count Stats per HTO Barcode  
 
 <a id="read_counts_hto"></a> 
+```{r}
+dummy_plot <- function(msg, plottitle="", size = 8){
+  ggplot(data.frame(1:2,1:2)) + 
+        geom_text(x= 0.5,y =0.5,label=msg) +
+        ggtitle(plottitle) +
+       theme(text = element_text(size = size))
 
+}
+```
 #### Read Counts by HTO Category and Barcode  
 ```{r hto_rna_read_counts, results = "asis"}
 # Reads per hto cat
@@ -382,7 +439,8 @@ all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,
 plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     temp_meta <- filter(hto_meta_singlet, sample_hto_pool == all_sample_hto_pool[i])
-    g <- qc_violin_plot(temp_meta,
+    if(nrow(temp_meta) > 0){
+          g <- qc_violin_plot(temp_meta,
                         category_x = "well_id",
                         name_x = "Well",
                         column_y = "n_reads",
@@ -390,6 +448,12 @@ for(i in seq_along(all_sample_hto_pool)){
                         fill = "dodgerblue") +
       theme(text = element_text(size =8)) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                      plottitle = all_sample_hto_pool[i], 
+                      size =8 )
+    }
+
     plot_list[[i]] <- g
 }
 
@@ -461,6 +525,7 @@ plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     
     temp_meta <- filter(hto_meta_singlet, sample_hto_pool == all_sample_hto_pool[i])
+    if(nrow(temp_meta) > 0) {
     g <- qc_violin_plot(temp_meta,
                         category_x = "well_id",
                         name_x = "Well",
@@ -469,6 +534,11 @@ for(i in seq_along(all_sample_hto_pool)){
                         fill = "purple") +
       theme(text = element_text(size =8)) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                      plottitle = all_sample_hto_pool[i], 
+                      size = 8)
+    }
     plot_list[[i]] <- g
 }
 
@@ -537,14 +607,20 @@ plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     
     temp_meta <- filter(hto_meta_singlet, sample_hto_pool == all_sample_hto_pool[i])
+    if(nrow(temp_meta) > 0) {
     g <- qc_violin_plot(temp_meta,
                         category_x = "well_id",
                         name_x = "Well",
                         column_y = "n_genes",
                         name_y = "N Genes per Cell",
                         fill = "orangered") +
-      theme(text = element_text(size =8)) +
+      theme(text = element_text(size = 8)) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                plottitle = all_sample_hto_pool[i], 
+                size = 8)
+    }
     plot_list[[i]] <- g
 }
 
@@ -632,13 +708,19 @@ plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     temp_meta <- hto_meta_singlet %>%
         dplyr::filter(sample_hto_pool == all_sample_hto_pool[i])
-    g <- ggplot(temp_meta, aes(n_umis, fct_mito_umi)) +
-      geom_point(color = "purple", alpha = 0.2) +
-      xlab("UMI per Cell (log10 scale)") +
-      ylab("Fraction Mitochondrial UMI") +
-      scale_x_log10() +
-      facet_grid( ~ well_id ) +
-      ggtitle(all_sample_hto_pool[i])
+    if(nrow(temp_meta) > 0){
+        g <- ggplot(temp_meta, aes(n_umis, fct_mito_umi)) +
+          geom_point(color = "purple", alpha = 0.2) +
+          xlab("UMI per Cell (log10 scale)") +
+          ylab("Fraction Mitochondrial UMI") +
+          scale_x_log10() +
+          facet_grid( ~ well_id ) +
+          ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                      plottitle = all_sample_hto_pool[i])
+    }
+
     plot_list[[i]] <- g
 }
 
@@ -699,13 +781,17 @@ plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     temp_meta <- hto_meta_singlet %>%
         dplyr::filter(sample_hto_pool == all_sample_hto_pool[i])
-    g <- ggplot(temp_meta, aes(n_genes, fct_mito_umi)) +
-      geom_point(color = "orangered", alpha = 0.2) +
-      xlab("UMI per Cell (log10 scale)") +
-      ylab("Fraction Mitochondrial UMI") +
-      scale_x_log10() +
-      facet_grid( ~ well_id ) +
+    if(nrow(temp_meta) > 0){
+      g <- ggplot(temp_meta, aes(n_genes, fct_mito_umi)) +
+        geom_point(color = "orangered", alpha = 0.2) +
+        xlab("UMI per Cell (log10 scale)") +
+        ylab("Fraction Mitochondrial UMI") +
+        scale_x_log10() +
+        facet_grid( ~ well_id ) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot("No singlet cells", plottitle = all_sample_hto_pool[i])
+    }
     plot_list[[i]] <- g
 }
 
@@ -750,7 +836,7 @@ pc_dims <- min(ncol(merged_so) - 1, 50)
 # suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
 stm("Finding Variable Features for hashed RNA umap")
-merged_so <- Seurat::FindVariableFeatures(object = merged_so, )
+merged_so <- Seurat::FindVariableFeatures(object = merged_so)
 
 stm("Scaling Data for hashed RNA umap")
 merged_so <- Seurat::ScaleData(object = merged_so, verbose = FALSE)
