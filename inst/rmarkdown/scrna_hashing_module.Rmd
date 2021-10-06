@@ -3,7 +3,7 @@
 
 
 ```{r}
-scrna_hashing_module_version <- "1.0.0"
+scrna_hashing_module_version <- "1.0.1"  # 20211006--update to handle missing expected hto
 
 ```
 
@@ -656,9 +656,20 @@ batchreporter::make_subchunk(g, subchunk_name = "hto_fraction_subchunk",
   
 [Return to Top](#top_cell_hashing)  
 
-<a id="read_counts_well"></a>
+<a id="read_counts_well"></a>  
+
+```{r}
+dummy_plot <- function(msg, plottitle="", size = 8){
+  ggplot(data.frame(1:2,1:2)) + 
+        geom_text(x= 0.5,y =0.5,label=msg) +
+        ggtitle(plottitle) +
+       theme(text = element_text(size = size))
+
+}
+```
   
 ##### Read Counts by HTO Category and Well  
+
 
 ```{r read_counts_well, results="asis"}
 # Reads per hto cat
@@ -707,7 +718,8 @@ all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,
 plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     temp_meta <- filter(meta, sample_hto_pool == all_sample_hto_pool[i])
-    g <- qc_violin_plot(temp_meta,
+    if(nrow(temp_meta) > 0){
+          g <- qc_violin_plot(temp_meta,
                         category_x = "well_id",
                         name_x = "Well",
                         column_y = "n_reads",
@@ -715,6 +727,12 @@ for(i in seq_along(all_sample_hto_pool)){
                         fill = "dodgerblue") +
       theme(text = element_text(size =8)) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                      plottitle = all_sample_hto_pool[i], 
+                      size =8 )
+    }
+
     plot_list[[i]] <- g
 }
 
@@ -782,6 +800,7 @@ plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     
     temp_meta <- filter(meta, sample_hto_pool == all_sample_hto_pool[i])
+     if(nrow(temp_meta) > 0) {
     g <- qc_violin_plot(temp_meta,
                         category_x = "well_id",
                         name_x = "Well",
@@ -790,6 +809,11 @@ for(i in seq_along(all_sample_hto_pool)){
                         fill = "purple") +
       theme(text = element_text(size =8)) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                      plottitle = all_sample_hto_pool[i], 
+                      size = 8)
+    }
     plot_list[[i]] <- g
 }
 
@@ -857,14 +881,20 @@ plot_list <- list()
 for(i in seq_along(all_sample_hto_pool)){
     
     temp_meta <- filter(meta, sample_hto_pool == all_sample_hto_pool[i])
+    if(nrow(temp_meta) > 0) {
     g <- qc_violin_plot(temp_meta,
                         category_x = "well_id",
                         name_x = "Well",
                         column_y = "n_genes",
                         name_y = "N Genes per Cell",
                         fill = "orangered") +
-      theme(text = element_text(size =8)) +
+      theme(text = element_text(size = 8)) +
       ggtitle(all_sample_hto_pool[i])
+    } else {
+      g <- dummy_plot(msg = "No singlet cells", 
+                plottitle = all_sample_hto_pool[i], 
+                size = 8)
+    }
     plot_list[[i]] <- g
 }
 
