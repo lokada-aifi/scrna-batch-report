@@ -3,7 +3,7 @@
 <a id="rna_seq_well_top"></a>
 
 ```{r, include=FALSE}
-scrna_seq_well_module_version <- "1.0.0" # update for Cellranger ARC output compatibility
+scrna_seq_well_module_version <- "1.0.1" # 20210818
 stm("Starting scRNA Well Module")
 ```
 
@@ -204,8 +204,9 @@ if(all(vnames_rna %in% colnames(well_info))){
     rna_data_type <- "arc"
 } else {
     vnames <- setdiff( colnames(well_info), c("well_id","pool_id"))
+    n_vars <- length(vnames)
     vlabels <- gsub("_"," ", vnames)
-    vartypes <- rep(NA, length(vnames))
+    vartypes <- rep(NA, n_vars)
     
     getDigits <- function(vNumeric){
       vChar <- as.character(vNumeric)
