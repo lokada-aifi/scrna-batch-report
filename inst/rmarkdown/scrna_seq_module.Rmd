@@ -3,7 +3,7 @@
 <!-- Note: should this be changed to just sample_h5? to allow for other types of h5 files? ie metadata-injected h5 pre-hashing? -->
 
 ```{r}
-scrna_seq_module_version <- "1.0.0"
+scrna_seq_module_version <- "1.0.1" # 20211006 extend for ARC metadata columns
 
 ```
 
@@ -34,34 +34,6 @@ h5_file_type <- ifelse(h5_file_dir == h5_file_dir_options[1], "cellranger",
 
 ```  
 
-```{r scrna_definitions} 
-vnames <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
-            "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
-            "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
-            "q30_bases_in_sample_index", "q30_bases_in_umi", "reads_mapped_antisense_to_gene", 
-            "reads_mapped_confidently_to_exonic_regions", "reads_mapped_confidently_to_genome", 
-            "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
-            "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
-            "sequencing_saturation", "total_genes_detected", "valid_barcodes")
-vlabels <- c("Estimated Number of Cells", "Fraction Reads in Cells", 
-            "Mean Reads per Cell", "Median Genes per Cell", "Median UMI per Cell", 
-            "Number of Reads", "Q30 Bases in Barcode (%)", "Q30 Bases in RNA Read (%)", 
-            "Q30 Bases in Sample Index (%)", "Q30 Bases in UMI (%)", "Reads Mapped Antisense to Gene (%)", 
-            "Reads Mapped Confidently to Exonic Regions (%)", "Reads Mapped Confidently to Genome (%)", 
-            "Reads Mapped Confidently to Intergenic Regions (%)",
-            "Reads Mapped Confidently to Intronic Regions (%)", 
-            "Reads Mapped Confidently to Transcriptome (%)", "Reads Mapped to Genome (%)", 
-            "Sequencing Saturation (%)", "Total Genes Detected", "Valid Barcodes (%)")
-n_vars <- length(vnames)
-vartypes <- c(rep("Cells", 5), rep("Sequencing", 5), rep("Mapping", 7),"Sequencing","Cells","Sequencing")
-digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
-
-df_vars <- data.frame(Category = factor(vartypes, levels = c("Cells","Sequencing","Mapping")),
-                      Variable_name = vlabels,
-                      Variable = vnames,
-                      Round = digitsRound)
-```
-
 ```{r scrna_seq_input_files}
 # locate files unless already in memory from an upstream process. 
 expected_files <- switch(h5_file_type,
@@ -89,21 +61,119 @@ if(!exists("well_info")){
   remove("well_list")
 }
 
+```  
+  
+```{r scrna_definitions} 
+vnames_rna <- c("estimated_number_of_cells", "fraction_reads_in_cells", 
+            "mean_reads_per_cell", "median_genes_per_cell", "median_umi_counts_per_cell", 
+            "number_of_reads", "q30_bases_in_barcode", "q30_bases_in_rna_read", 
+            "q30_bases_in_sample_index", "q30_bases_in_umi", "reads_mapped_antisense_to_gene", 
+            "reads_mapped_confidently_to_exonic_regions", "reads_mapped_confidently_to_genome", 
+            "reads_mapped_confidently_to_intergenic_regions","reads_mapped_confidently_to_intronic_regions", 
+            "reads_mapped_confidently_to_transcriptome", "reads_mapped_to_genome", 
+            "sequencing_saturation", "total_genes_detected", "valid_barcodes")
+
+vnames_arc <- c("estimated_number_of_cells",
+  "gex_fraction_of_transcriptomic_reads_in_cells","gex_mean_raw_reads_per_cell","gex_median_genes_per_cell",
+  "gex_median_umi_counts_per_cell","gex_percent_duplicates","gex_q30_bases_in_barcode",
+  "gex_q30_bases_in_read_2","gex_q30_bases_in_sample_index_i1","gex_q30_bases_in_sample_index_i2",
+  "gex_q30_bases_in_umi","gex_reads_mapped_antisense_to_gene","gex_reads_mapped_confidently_to_exonic_regions",
+  "gex_reads_mapped_confidently_to_genome","gex_reads_mapped_confidently_to_intergenic_regions", "gex_reads_mapped_confidently_to_intronic_regions",
+  "gex_reads_mapped_confidently_to_transcriptome","gex_reads_mapped_to_genome","gex_reads_with_tso",
+  "gex_sequenced_read_pairs","gex_total_genes_detected","gex_valid_barcodes", "gex_valid_umis")  
+
+if(all(vnames_rna %in% colnames(well_info))){
+  vnames <- vnames_rna
+  vlabels <- c("Estimated Number of Cells", "Fraction Reads in Cells", 
+            "Mean Reads per Cell", "Median Genes per Cell", "Median UMI per Cell", 
+            "Number of Reads", "Q30 Bases in Barcode (%)", "Q30 Bases in RNA Read (%)", 
+            "Q30 Bases in Sample Index (%)", "Q30 Bases in UMI (%)", "Reads Mapped Antisense to Gene (%)", 
+            "Reads Mapped Confidently to Exonic Regions (%)", "Reads Mapped Confidently to Genome (%)", 
+            "Reads Mapped Confidently to Intergenic Regions (%)",
+            "Reads Mapped Confidently to Intronic Regions (%)", 
+            "Reads Mapped Confidently to Transcriptome (%)", "Reads Mapped to Genome (%)", 
+            "Sequencing Saturation (%)", "Total Genes Detected", "Valid Barcodes (%)")
+  n_vars <- length(vnames)
+  vartypes <- c(rep("Cells", 5), rep("Sequencing", 5), rep("Mapping", 7),"Sequencing","Cells","Sequencing")
+  vartypes <- factor(vartypes,  levels = c("Cells", "Sequencing", "Mapping"))
+
+  digitsRound <- c(0, 1, rep(0, 4), rep(1, 12), 0, 1)
+  rna_data_type <- "rna"
+} else if (all(vnames_arc %in% colnames(well_info))){
+  vnames <- vnames_arc
+  vlabels <- c("Estimated Number of Cells","Fraction Transcriptomic Reads in Cells",
+            "Mean Raw Reads per Cell", "Median Genes per Cell", "Median UMI per Cell", "Percent Duplicates",
+            "Q30 Bases in Barcode", "Q30 Bases in RNA Read 2", "Q30 Bases in Sample Index i1",
+            "Q30 Bases in Sample Index i2", "Q30 Bases in UMI", "Reads Mapped Antisense to Gene", 
+            "Reads Mapped Confidently to Exonic Regions", "Reads Mapped Confidently to Genome", 
+            "Reads Mapped Confidently to Intergenic Regions", 
+            "Reads Mapped Confidently to Intronic Regions", 
+            "Reads Mapped Confidently to Transcriptome", "Reads Mapped to Genome", "Reads with TSO",
+            "Sequenced Read Pairs", "Total Genes Detected", "Valid Barcodes", "Valid UMIs") 
+  n_vars <- length(vnames)
+  vartypes <- c(rep("Cells", 5), rep("Sequencing", 6), rep("Mapping", 7),"Sequencing","Sequencing","Cells","Sequencing","Sequencing")
+  digitsRound <- c(0, 3, 0, 0, 0, rep(3, 14), 0, 0, 3, 3)
+  
+  rna_data_type <- "arc"
+} else {
+    vnames <- setdiff( colnames(well_info), c("well_id","pool_id"))
+    n_vars <- length(vnames)
+    vlabels <- gsub("_"," ", vnames)
+    vartypes <- rep(NA, n_vars)
+    
+    getDigits <- function(vNumeric){
+      vChar <- as.character(vNumeric)
+      is_decimal <- any(grepl("[.]", vChar))
+      if(is_decimal){
+        decimal_digits <- nchar(vChar) - (nchar(gsub("[.].*","", vChar))+1)
+        n_digits <- max(decimal_digits)
+      } else {
+        n_digits <- 0
+      }
+      n_digits
+    }
+    digitsRound <- sapply(subset(well_info, select = vnames), getDigits)
+    
+    rna_data_type <- "unknown"
+}
+
+  df_vars <- data.frame(Category = vartypes,
+                        Variable_name = vlabels,
+                        Variable = vnames,
+                        Round = digitsRound)
 ```
+
 
 <a  id="pool_seq_summary"></a> 
 
 
 #### Pool Summary    
-```{r well_summary_table1, results = "asis"}
-pool_info <- well_info %>%
+```{r well_summary_table1, results = "asis"} 
+stm("Creating scrna well cellranger summary table")
+
+if(rna_data_type == "rna" | "number_of_reads" %in% names(well_info)){
+  pool_info <- well_info %>%
   dplyr::group_by(pool_id) %>%
   dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
             total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+} else if (rna_data_type == "arc" | "gex_sequenced_read_pairs" %in% names(well_info)){
+  pool_info <- well_info %>%
+  dplyr::group_by(pool_id) %>%
+  dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
+            total_sequenced_read_pairs = formatC(sum(gex_sequenced_read_pairs), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+} else {
+  print("Warning: No total reads column detected in well metadata")
+  pool_info <- well_info %>%  
+    dplyr::group_by(pool_id) %>%  
+    dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"), 
+                     total_reads = NA, .groups = "drop")
+}
+
 names(pool_info) <- stringr::str_to_title(gsub("_", " ", names(pool_info)))
 pool_info %>%
   gt::gt() %>%
   gt::cols_align(align = "right", columns = 2:3)
+
 ```  
 [Return to Top](#rna_seq_top) 
 
