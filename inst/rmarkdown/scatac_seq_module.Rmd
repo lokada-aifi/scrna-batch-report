@@ -1,7 +1,7 @@
 <a id="scatac_contents"></a>
 
 ```{r, include = FALSE}
-scatac_batch_module_version <- "1.0.0"
+scatac_batch_module_version <- "1.0.1"
 ```  
   
 #### Contents  
@@ -181,6 +181,27 @@ width_files <- width_files[sample_names]
 
 width_list <- map(width_files, fread)
 ```  
+
+Parsing Function
+```{r}
+# Note the pool pattern can be modified here if needed
+parse_sample_filename <- function(batch_id, labelname, pool_pattern = "-P\\d"){
+    pool_regex <- paste(pool_pattern, collapse="|")  # if multiple pattern strings supplied, accept any
+    has_pool <- grepl(pool_regex, labelname)
+    
+    if(has_pool){
+        pool_pattern <- paste0(batch_id, pool_pattern)
+        which_pool <- sapply(pool_pattern, grepl, labelname)
+        pool_pattern <- pool_pattern[which_pool][1]
+        samplename <- sub(paste0(pool_pattern,"_"), "" , labelname)
+    } else {
+        samplename <- sub(paste0(batch_id,"_"),"", labelname)
+    } 
+    return(samplename)
+}
+
+
+```
 
 </details>  
 <!-- End collapsed 'session prep' section -->
@@ -579,12 +600,16 @@ plot_grid(plotlist = qc_scatter_list,
 all_sat <- map_dfr(1:length(sat_list),
                    function(x) {
                      sat <- sat_list[[x]]
-                     sat_pbmc_sample <- sub(paste0(batch_id,"_"),"",names(sat_list)[x])
+                     # sat_pbmc_sample <- sub(paste0(batch_id,"_"),"",names(sat_list)[x])
+                     sat_pbmc_sample <- parse_sample_filename(batch_id = batch_id, 
+                                                              labelname = names(sat_list)[x], 
+                                                              pool_pattern = "-P\\d")
                      sat$pbmc_sample_id <- sat_pbmc_sample
                      sat$well_id <- well_samples$well_id[well_samples$pbmc_sample_id == sat_pbmc_sample]
                      sat$well_label <- well_samples$well_label[well_samples$pbmc_sample_id == sat_pbmc_sample]
                      sat
                    })
+                   
 ```
 
 ##### Saturation cutoffs
@@ -699,7 +724,7 @@ grid_height <- n_grid_rows * 2
 frag_widths <- map_dfr(1:length(width_list),
                    function(x) {
                      fw <- width_list[[x]]
-                     fw_pbmc_sample <- sub(paste0(batch_id,"_"),"",names(width_list)[x])
+                     fw_pbmc_sample <- parse_sample_filename(batch_id, labelname= names(width_list)[x], pool_pattern = "-P\\d")
                      fw$pbmc_sample_id <- fw_pbmc_sample
                      fw$well_id <- well_samples$well_id[well_samples$pbmc_sample_id == fw_pbmc_sample]
                      fw$well_label <- well_samples$well_label[well_samples$pbmc_sample_id == fw_pbmc_sample]
