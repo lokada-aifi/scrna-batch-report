@@ -764,28 +764,24 @@ rm(hto_singlet_summary)
 ```{r Well Count By HTO Barcode Plot, class.output = "superbigimage", results="asis"}
 stm("Plotting well count per hto")
 
-plot_list <- list()
-for (i in seq_along(pools)){
-  plot_list[[i]] <- qc_aligned_barplot_facet(meta = hto_meta_singlet[pool_id == pools[i],],
+g <- qc_aligned_barplot_facet(meta = hto_meta_singlet,
                    category_x = "sample_hto_pool",
                    category_y = "well_id",
                    category_name = "Well ID",
                    name_x = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
-                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) 
-}
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free", drop = TRUE) 
 
-g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
-temp_figwidth <- max(0.6*n_wells + 1*n_pools + 3, 8)
-temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+temp_figwidth <- max(0.32*n_samples + 0.5*n_pools + 2, 4)
+temp_figheight <- max(ceiling(n_pools/2)*((n_wells/n_pools)/3) + 0.4, 4.5)
 batchreporter::make_subchunk(g, subchunk_name = "well_count_subchunk", 
-              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE, class.output = "superbigimage"), 
-              quiet_knit = TRUE)
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)  
+              
+rm(g)
 
-rm(g, plot_list)
-
-```  
+```   
   
 [Return to Contents](#top_cell_hashing)  
   
@@ -805,7 +801,7 @@ g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
                    as_fraction = TRUE , 
                    facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE)
 
-temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
+temp_figwidth <- max(0.32*n_samples + 0.5*n_pools + 2, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
 batchreporter::make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
