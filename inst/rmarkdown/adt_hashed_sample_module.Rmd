@@ -1,8 +1,10 @@
 <a id="adt_hash_top"></a>  
 
 ```{r adt_hash_setup, include=FALSE}
+orig_workspace <- ls()
+
 knitr::opts_chunk$set(echo = TRUE)
-adt_hashed_module_version <- "1.0.0"
+adt_hashed_module_version <- "1.0.1"  # 20211201
 ```  
 
 #### Contents  
@@ -96,6 +98,9 @@ while (i < length(count_list) + 1){
 }
 
 combined_df <- bind_rows(count_list, .id = "column_label")
+
+rm(count_list, hto_list)
+
 ```  
 <a id="hashed_adt_sample_violin"></a> 
 
@@ -110,9 +115,19 @@ violin_plot +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
   geom_hline(yintercept=1000, linetype="dashed", color = "blue") + 
   geom_hline(yintercept=300, linetype="solid", color = "red")
+ 
 ```  
 [Return to Contents](#adt_hash_top) 
 
 ---  
 
-Hashed ADT batch module v.`r {adt_hashed_module_version}`, Zach Thomson
+Hashed ADT batch module v.`r {adt_hashed_module_version}`, Zach Thomson  
+
+```{r adt_hash_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list = module_vars)
+rm(module_vars)
+
+gc()
+
+``` 

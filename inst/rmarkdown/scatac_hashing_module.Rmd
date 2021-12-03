@@ -1,7 +1,9 @@
 <a id="scatac_hashing_contents"></a>  
 
 ```{r, include = FALSE}  
-scatac_hashing_module_version <- "1.0.1"
+orig_workspace <- ls()
+
+scatac_hashing_module_version <- "1.0.2" #20211201
 ```  
 
 ### Contents
@@ -804,3 +806,10 @@ stm("10x ATAC Batch QC Report complete.")
 
 Hashed scATAC batch QC module `r {scatac_hashing_module_version}`, Lucas Graybuck, Lauren Okada  
 
+```{r scatac_sample_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list=module_vars)
+
+gc()
+
+```
