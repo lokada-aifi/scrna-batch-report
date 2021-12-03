@@ -2,8 +2,10 @@
 <!-- Parent document must have a variable "in_dir" containing a subfolder "hto" and "rna" -->
 <a id="top_cell_hashing"></a>  
 
-```{r, include = FALSE}
-hto_module_version <- "1.0.0"
+```{r, include = FALSE} 
+orig_workspace <- ls()
+
+hto_module_version <- "1.0.1"  # 20211201
 ```
 
 ```{r include = FALSE}
@@ -177,7 +179,6 @@ hto_meta[ , hto_order:=  as.numeric(gsub("HT","", hto_name))]
 hto_meta[ , sample_hto_pool:=  factor(sample_hto_pool, levels = unique(sample_hto_pool[order(pool_id, hto_order)]))]
 hto_meta[ , hto_order:= NULL]
 hto_meta[ , hto_category:= factor(hto_category, levels = c("no_hash", "singlet", "doublet", "multiplet"))]
-# hto_meta_list <- split(hto_meta, hto_meta$well_id)
 
 hto_meta_singlet <- subset(hto_meta, hto_category=="singlet")
 ```
@@ -221,7 +222,11 @@ hto_df_list <- lapply(hto_mat_wells, function(x){
                      value.name= "count",measure.vars = to_melt)
   mat <- mat[hto_meta, on = c("barcodes"= "cell_barcode"), `:=`(pool_id= i.pool_id, well_id=i.well_id)]
 })
+rm(hto_mat_list)
+
 all_hash_fmt <- do.call(rbind, hto_df_list)
+rm(hto_df_list)
+
 # Merge in metadata
 all_hash_fmt <- all_hash_fmt[hto_meta[,.(cell_barcode, well_id, pool_id, hto_barcode, hto_category)], 
                              on =c("barcodes"="cell_barcode","well_id"="well_id","pool_id"="pool_id")]
@@ -269,6 +274,8 @@ pool_info <- all_hash_fmt %>%
 pool_info %>%
   gt::gt() %>%
   gt::cols_align(align = "right", columns = 2)
+ 
+rm(pool_info)
 
 ```  
 
@@ -296,6 +303,8 @@ tempwidth <- max(n_samples*0.5 + n_pools*0.1 + 0.2, 4)
 make_subchunk(g, subchunk_name = "hto_totalumi_subchunk",quiet_knit = T,
               chunk_opt_list = list(fig.width = tempwidth, fig.height = 3))
 
+rm(g)
+
 ```  
 
 [Return to Contents](#top_cell_hashing) 
@@ -322,6 +331,7 @@ tempwidth2 <- n_samples*0.5 + n_pools*0.1 + 2.2
 make_subchunk(g2, subchunk_name = "hto_umibyhto_subchunk",quiet_knit = T,
               chunk_opt_list = list(fig.width = tempwidth, fig.height = 6))
 
+rm(g2) 
 ```  
 
 [Return to Contents](#top_cell_hashing) 
@@ -393,7 +403,10 @@ temp_figheight <- n_wells*0.25 + 1
 temp_figwidth <- length(unique(df_expected_hto$hto_name))*0.4 + 2
 
 make_subchunk(hm_pos, subchunk_name="hto_positive_matrix_subchunk", quiet_knit = T, 
-              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth))
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth))  
+              
+rm(df_expected_hto)
+rm(hm_pos)
 
 ```   
 
@@ -474,6 +487,8 @@ for (i in seq_along(pools)){
   batchreporter::make_subchunk(g_ridge, subchunk_name = paste0("ridge_", i), 
                 chunk_opt_list = list(fig.height = temp_height, fig.width = 18, warning = FALSE), 
                 quiet_knit = TRUE)
+                
+  rm(df, df_lines, detected_labels, x_max, x_min, x_label, g_ridge)
 }
 
 ```   
@@ -507,6 +522,8 @@ ply_cutoff_box <- plotly::ggplotly(g_cutoff_box) %>%
 make_subchunk(ply_cutoff_box, subchunk_name = "hto_assignment_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
+              
+rm(g_cutoff_box, ply_cutoff_box)
 
 ```  
   
@@ -539,7 +556,10 @@ ply_cutoff_pos <- plotly::ggplotly(g_cutoff_pos) %>%
 
 make_subchunk(ply_cutoff_pos, subchunk_name = "hto_positive_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
-              quiet_knit = TRUE)
+              quiet_knit = TRUE)  
+              
+rm(g_cutoff_pos, ply_cutoff_pos)
+
 ```  
   
 [Return to Contents](#top_cell_hashing)  
@@ -560,6 +580,8 @@ pool_summary[, pct_cells := round(n_cells/sum(n_cells)*100,1), by = pool_id]
 setcolorder(pool_summary, c("pool_id", "hto_category", "n_cells", "pct_cells"))
 
 qc_table(pool_summary)
+
+rm(pool_summary)
 
 ```   
 [Return to Contents](#top_cell_hashing) 
@@ -585,7 +607,9 @@ temp_figwidth <-  max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
 make_subchunk(g, subchunk_name = "hto_cat_counts_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
-              quiet_knit = TRUE)
+              quiet_knit = TRUE)  
+              
+rm(g)
   
 ```  
   
@@ -612,6 +636,8 @@ temp_figheight <- ceiling(n_pools/2)*4 + 0.4
 make_subchunk(g, subchunk_name = "hto_cat_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
+
+rm(g)
   
 ```
 
@@ -636,6 +662,8 @@ setorder(well_summary, pool_id, well_id, hto_category)
 
 qc_table(well_summary)
 
+rm(well_summary)
+
 ```   
 
 [Return to Contents](#top_cell_hashing) 
@@ -659,13 +687,13 @@ g <- qc_aligned_barplot_facet(meta = hto_meta_singlet,
                    padding = 0.2,
                    facet_formula = formula("~pool_id"), nrow = 1, scales = "free", drop = TRUE) 
 
-# g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
-
 temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 2, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
 batchreporter::make_subchunk(g, subchunk_name = "hto_cat_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
-              quiet_knit = TRUE)
+              quiet_knit = TRUE)  
+              
+rm(g)
 
 ```   
   
@@ -694,6 +722,8 @@ temp_figheight <- ceiling(n_pools/2)*4 + 0.4
 batchreporter::make_subchunk(g, subchunk_name = "hto_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
+              
+rm(g)
   
 ```  
   
@@ -719,6 +749,8 @@ setcolorder(hto_singlet_summary, c("pool_id",sample_column_name, "hto_name", "ht
 
 qc_table(hto_singlet_summary)
 
+rm(hto_singlet_summary)
+
 ```  
   
 [Return to Contents](#top_cell_hashing)  
@@ -732,26 +764,24 @@ qc_table(hto_singlet_summary)
 ```{r Well Count By HTO Barcode Plot, class.output = "superbigimage", results="asis"}
 stm("Plotting well count per hto")
 
-plot_list <- list()
-for (i in seq_along(pools)){
-  plot_list[[i]] <- qc_aligned_barplot_facet(meta = hto_meta_singlet[pool_id == pools[i],],
+g <- qc_aligned_barplot_facet(meta = hto_meta_singlet,
                    category_x = "sample_hto_pool",
                    category_y = "well_id",
                    category_name = "Well ID",
                    name_x = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
-                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) 
-}
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free", drop = TRUE) 
 
-g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
-temp_figwidth <- max(0.6*n_wells + 1*n_pools + 3, 8)
-temp_figheight <- ceiling(n_pools/2)*4 + 0.4
+temp_figwidth <- max(0.32*n_samples + 0.5*n_pools + 2, 4)
+temp_figheight <- max(ceiling(n_pools/2)*((n_wells/n_pools)/3) + 0.4, 4.5)
 batchreporter::make_subchunk(g, subchunk_name = "well_count_subchunk", 
-              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE, class.output = "superbigimage"), 
-              quiet_knit = TRUE)
+              chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
+              quiet_knit = TRUE)  
+              
+rm(g)
 
-```  
+```   
   
 [Return to Contents](#top_cell_hashing)  
   
@@ -771,17 +801,27 @@ g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
                    as_fraction = TRUE , 
                    facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE)
 
-temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
+temp_figwidth <- max(0.32*n_samples + 0.5*n_pools + 2, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
 batchreporter::make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
+rm(g)
+
 ```  
   
-[Return to Contents](#top_cell_hashing)  
+[Return to Contents](#top_cell_hashing)   
 
 ---  
 
 HTO batch module v.`r {hto_module_version}`, Lauren Okada  
 
+```{r hto_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list=module_vars)
+rm(module_vars)
+
+gc()
+
+``` 

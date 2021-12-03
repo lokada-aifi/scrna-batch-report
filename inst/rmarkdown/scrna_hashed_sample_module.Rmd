@@ -1,8 +1,12 @@
 <a id="rna_hashing_top"></a>   
 
-```{r}
-scrna_seq_sample_module_version <- "1.0.1" #20210818
+```{r}  
+orig_workspace <- ls() 
+
+scrna_seq_sample_module_version <- "1.0.2" #20211201
 ```
+
+The following metrics summarize the sequencing and alignment by Sample ID after hto-parsing and filtering for singlet cells.  
 
 
 ### Contents 
@@ -827,8 +831,6 @@ merged_so <- Seurat::NormalizeData(object = merged_so,
                                    scale.factor = 10000,
                                    margin = 1)
 
-normCounts <- merged_so[["RNA"]]@data
-
 ```  
 
 ```{r hto_rna_PCA}
@@ -877,9 +879,7 @@ cumvar_string <- sprintf(fmt = "%.1f", var_selected_pc*100)
 
 stm(sprintf("Selected %s significant pcs via JackStraw, %s%% explained variation", nPC, cumvar_string))
 
-pc_embeddings <- merged_so@reductions$pca@cell.embeddings
-
-# stm(sprintf("Using %s principal components for umap",nPC))
+rm(jackstraw_so)
 ```
 
 ```{r hto_rna_merged_umap}
@@ -906,11 +906,6 @@ umapDF <- merge(umapDF, hto_meta_singlet, by = "barcodes")
 rownames(umapDF) <- umapDF$barcodes
 
 umapDF <- umapDF[rownames(merged_so@"meta.data"), , drop = F]
-
-normCounts <- merged_so[["RNA"]]@data
-if(!all(rownames(umapDF) == colnames(normCounts))){
-  stop("Merged UMAP dataframe does not match columns in normalized counts for hashed RNA UMAP")
-}
 
 ```
 
@@ -1024,5 +1019,13 @@ cowplot::plot_grid(aligned_plots[[1]],
 
 ---  
 
-scRNA seq report sample module v.`r {scrna_seq_sample_module_version}`, Lauren Okada
+scRNA seq report sample module v.`r {scrna_seq_sample_module_version}`, Lauren Okada  
 
+
+```{r scrna_seq_sample_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list=module_vars)
+
+gc()
+
+```

@@ -1,7 +1,9 @@
 <a id="scatac_contents"></a>
 
 ```{r, include = FALSE}
-scatac_batch_module_version <- "1.0.1"
+orig_workspace <- ls()
+
+scatac_batch_module_version <- "1.0.2" #2021201
 ```  
   
 #### Contents  
@@ -788,3 +790,11 @@ stm("10x ATAC Batch QC Report complete.")
 ---  
 
 scATAC report module `r {scatac_batch_module_version}`, Lucas Graybuck  
+
+```{r scatac_well_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list=module_vars)
+
+gc()
+
+```

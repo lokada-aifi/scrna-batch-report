@@ -1,8 +1,10 @@
 <a id="adt_top"></a>  
 
 ```{r adt_setup, include=FALSE}
+orig_workspace <- ls()
+
 knitr::opts_chunk$set(echo = TRUE)
-adt_module_version <- "1.0.1" #20210818
+adt_module_version <- "1.0.2" # 20211201
 
 stm("Beginning ADT module")
 ```  
@@ -121,15 +123,21 @@ while (i < length(count_list) + 1){
   # add merged object to list
   seurat_list[[i]] <- so_merge
   
+  # clear out intermediate variables
+  rm(diff_bcs, n_neg, neg, neg_50k, pos_subset, pos_so, neg_so, so_merge)
+  
   # proceed to next one
   i = i + 1
-}
+}  
+
+rm(pos_count_list)  
 
 ```  
 
 #### Merge Seurat Objects
 ```{r adt_merge seurat objects}  
 all_merge <- Reduce(merge, seurat_list)
+
 
 ```  
 </details>  
@@ -209,6 +217,7 @@ while (i < length(count_list) + 1){
 }
 
 combined_colsums <- bind_rows(colsums_list, .id = "column_label")
+rm(colsums_list, count_list, seurat_list)
 ```  
   
 <a id= "adt_well_umi_plot"></a>  
@@ -225,6 +234,16 @@ ggplot(combined_colsums, aes(x = reorder(ADT, -Count), y = Count, color = Well))
 ```  
 [Return to Contents](#adt_top) 
 
+
 ---  
 
-ADT report module v.`r {adt_module_version}`, Zach Thomson
+ADT report module v.`r {adt_module_version}`, Zach Thomson  
+
+```{r adt_well_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list = module_vars)
+rm(module_vars)
+
+gc()
+
+``` 
