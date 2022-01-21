@@ -34,7 +34,7 @@ R functions and scripts for summarizing and performing batch-level QC on AIFI se
 
 This repository requires that `pandoc` and `libhdf5-devel` libraries are installed as dependencies of the `H5weaver` functions:
 ```
-sudo apt-get install pandoc libhdf5-devel
+sudo apt-get install pandoc libhdf5-dev
 ```
 
 It also depends on the internal AIFI `H5weaver` and `HTOparser` packages. Additional CRAN packages needed to run reports can be found in the `Description` file.
