@@ -3,7 +3,7 @@
 ```{r, include = FALSE}  
 orig_workspace <- ls()
 
-scatac_hashing_module_version <- "1.0.2" #20211201
+scatac_hashing_module_version <- "1.0.3" #20220131
 ```  
 
 ### Contents
@@ -155,9 +155,9 @@ assertthat::assert_that(dir.exists(in_hto),
                         msg = "Attempting to run rna quality with hto module. Input `in_dir` does not contain 'hto' folder")
 
 assertthat::assert_that(exists("in_config"),
-                         msg = "Attempting to rna quality with hto module. Missing `in_config` variable definition")
+                         msg = "Attempting to run scATAC hashing module. Missing `in_config` variable definition")
 assertthat::assert_that(file.exists(in_config),
-                         msg = sprintf("Attempting to run rna quality with hto module. Input file `in_config` [%s] does not exist", in_config))
+                         msg = sprintf("Attempting to run scATAC hashing module. Input file `in_config` [%s] does not exist", in_config))
 
 # Read in all hto metadata files, check expected numbers vs input well info
 all_hto_meta <- list.files(path = in_hto, 
@@ -171,6 +171,17 @@ stm(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = 
 cat(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
 
 ```  
+
+Config
+```{r hto_atac_read_config}
+# Config
+config_list<- batchreporter::load_config(in_config)
+
+hash_key <- config_list$hash_key
+sample_column_name <- config_list$sample_column_name
+
+```
+
 <!-- </details> -->
 <!-- End collapsed session prep section -->
 
@@ -238,6 +249,15 @@ meta$barcode_category[meta$filtered & meta$pass_fail == "pass"] <- "pass_singlet
 
 ##### Format HTO metadata
 ```{r atac_hto_meta_format} 
+stm("Reading in hto key for hashed scATAC analysis")
+# Read in all hto key to match hto names to barcodes
+hto_key <- system.file(file.path("reference", hash_key), package = "HTOparser")  # Parameterize this value
+in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
+  mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
+  mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% # use HT number value to reorder the HT levels
+  select(-hto_order) 
+  
+  
 stm("Formatting HTO meta data") 
 
 hto_meta_list <- lapply(all_hto_meta, fread)
