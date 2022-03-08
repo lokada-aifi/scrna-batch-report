@@ -53,6 +53,7 @@ quiet_library(purrr)
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 quiet_library(Seurat)
+library(readr)
 
 stm("Starting NGS Batch Report")
 
@@ -142,7 +143,7 @@ assertthat::assert_that(batch_id == unique(df_key$BatchID), msg = "Batch in inpu
 
 Determine which modalities streams were run  
 ```{r determine_modalities}
-defined_modalities <- c("scrna", "scatac", "adt", "hto")
+defined_modalities <- c("scrna", "scatac", "adt", "hto","tcr","bcr")
 
 # convert method string to vector
 in_method <- strsplit(in_method_string, split = ";")[[1]]
@@ -160,6 +161,8 @@ has_rna <- "scrna" %in% in_method
 has_atac <- "scatac" %in% in_method
 has_adt <- "adt" %in% in_method
 has_hto <- "hto" %in% in_method
+has_tcr <- "tcr" %in% in_method
+has_bcr <- "bcr" %in% in_method
 
 ```  
 
@@ -193,6 +196,21 @@ if(has_hto){
   }
 }
 
+if(has_tcr){
+  in_tcr <- file.path(in_dir, "tcr")
+  if(!dir.exists(in_tcr)){
+    stop(sprintf("Expected tcr input directory [%s] does not exist.", in_tcr))
+  }
+}
+
+
+if(has_bcr){
+  in_bcr <- file.path(in_dir, "bcr")
+  if(!dir.exists(in_bcr)){
+    stop(sprintf("Expected bcr input directory [%s] does not exist.", in_bcr))
+  }
+}
+
 ```  
 
 </details> 
@@ -211,7 +229,7 @@ if(n_pools==1 & grepl("P0$", pools)){
   n_pools_label <- n_pools
 }
 
-wells <- unlist(strsplit(unique(df_key$WellID), split = ";"))
+wells <- unlist(strsplit(as.character(unique(df_key$WellID)), split = ";"))
 n_wells <- length(wells)
 
 samples <- unique(df_key$SampleID)
@@ -256,6 +274,8 @@ if(!is.na(in_batch_meta)){
 }  
 ```   
 
+
+
 ```{r hashing_tab, results = "asis", eval = has_hto, echo = FALSE}
 cat("## Cell Hashing", sep = "\n")
 
@@ -264,6 +284,9 @@ cat("## Cell Hashing", sep = "\n")
 ```{r hashing_child, child = system.file("rmarkdown/hto_module.Rmd", package = "batchreporter"), eval = has_hto}
 
 ```  
+
+
+
 
 ```{r scrna_tab, results = "asis", eval = has_rna, echo = FALSE}
 cat("## scRNA Well", sep = "\n")
@@ -301,6 +324,8 @@ cat("## ADT Sample", sep = "\n")
 
 ```
 
+
+
 ```{r atac_tab, results = "asis", eval = has_atac, echo = FALSE}
 cat("## scATAC Well", sep = "\n")
 
@@ -318,8 +343,47 @@ cat("## scATAC Sample", sep = "\n")
 ```{r hashed_atac_child, child = system.file("rmarkdown/scatac_hashing_module.Rmd", package = "batchreporter"), eval = has_atac & has_hto}
 
 ```   
+
+ 
+```{r tcr_tab, results = "asis", eval = has_tcr, echo = FALSE}
+cat("## scTCR Well", sep = "\n")
+
+```  
+
+```{r tcr_child, child =  system.file("rmarkdown/tcr_well_module.Rmd", package = "batchreporter"), eval = has_tcr}
+
+```  
+
+
+```{r hashed_tcr_tab, results = "asis", eval = has_tcr & has_hto, echo = FALSE}
+cat("## scTCR Sample", sep = "\n")
+
+```  
+  
+```{r hashed_tcr_child, child = system.file("rmarkdown/tcr_hashed_sample_module.Rmd", package = "batchreporter"), eval = has_tcr & has_hto}
+
+
+```{r bcr_tab, results = "asis", eval = has_bcr, echo = FALSE}
+cat("## scBCR Well", sep = "\n")
+
+```  
+
+```{r bcr_child, child =  system.file("rmarkdown/bcr_well_module.Rmd", package = "batchreporter"), eval = has_bcr}
+
+```  
+
+```{r hashed_bcr_tab, results = "asis", eval = has_bcr & has_hto, echo = FALSE}
+cat("## scBCR Sample", sep = "\n")
+
+```  
+
+```{r hashed_bcr_child, child =  system.file("rmarkdown/bcr_hashed_sample_module.Rmd", package = "batchreporter"), eval = has_bcr & has_hto}
+
+```  
+  
   
 ## Session Information   
+
 
 <a id="top_session_info"></a>  
 

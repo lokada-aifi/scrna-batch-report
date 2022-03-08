@@ -1,0 +1,256 @@
+<a id="bcr_well_top"></a>
+
+```{r, include=FALSE} 
+orig_workspace <- ls()
+scBCR_seq_well_module_version <- "1.0.0" # 20220125
+options(warn = -1)
+
+stm("Starting BCR Well Module")
+```
+Some codes in module are the modification from Lauren Okada batchreporter scRNA well module codes  
+
+The following metrics summarize the BCR sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  
+
+
+### Contents 
+#### [Detailed Well Summary](#well_seq_summary)
+#### [Plots of Well-Level Metrics](#seq_metrics_plots)  
+#### [Clonotype Summay](#bcr_clone_summary)
+   - [Clonotype Size Distribution](#bcr_clone_size)  
+  - [Unique Clonotype](#bcr_unique_clone_type)  
+  - [CDR3 Nucleotide Distribution Summary](#bcr_cdr3_nt_distribution)
+  - [Clonotype Abundance Summary](#bcr_clone_type_abudance)
+
+ 
+Check Dependencies  
+```{r bcr_dependency_check, include = FALSE}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(tibble))
+suppressPackageStartupMessages(library(stringr))
+
+assertthat::assert_that(exists("in_bcr"))  
+
+summary_files <- list.files(path = in_bcr, 
+                               pattern = "summary.csv", 
+                               full.names = TRUE, recursive = TRUE)
+assertthat::assert_that(length(summary_files) >0, 
+                        msg = sprintf("Did not detect any summary.csv files in input bcr directory %s", in_bcr))
+    
+    
+
+contig_files <- list.files(path = in_bcr, 
+                               pattern = "Reformated.csv", 
+                               full.names = TRUE, recursive = TRUE)
+assertthat::assert_that(length(contig_files) >0, 
+                        msg = sprintf("Did not detect any BCR contig files in input bcr directory %s", in_bcr))
+
+```   
+
+
+```{r bcr_mummary}
+stm("Reading and Merging all bcr summary")
+
+options(warn = -1)
+
+last_elems <- lapply(strsplit(summary_files, split = "/"), tail, n = 1L)
+WellID <- sapply(lapply(last_elems, function(x)  strsplit(x, split = "_") ), function(x) x[[1]])[1,]
+
+summary_df <- do.call(rbind,lapply(summary_files,read.csv))
+
+bcr_names<-colnames(summary_df)
+vlabels<-colnames(summary_df)
+    
+pColumns<-summary_df %>%
+        select(matches('Q30|Fraction|contig|spanning|any_V.D.J_gene|Valid_barcodes|Reads_mapped'))%>% colnames()
+for (i in pColumns){
+    summary_df[,i]<-as.numeric(sub("%", "",summary_df[,i],fixed=TRUE))
+}
+setnames(summary_df, old = pColumns, new = paste(pColumns, "(%)", sep=""))
+summary_df$WellID<-WellID
+
+pool_id<-substring(gsub("^.*\\P","P",WellID), 1,2)
+summary_df$pool_id<-pool_id   
+summary_df <- select(summary_df, -contains(".1"))
+
+```  
+    
+ 
+<a id= "seq_metrics_plots"></a>  
+
+### Plots of Well-Level Metrics  
+  
+```{r bcr_well_plots, results = "asis", fig.height = 3.5}
+stm("Generating sequencing and alignment QC plots")
+
+metric_colors <- hcl.colors(n = 21, palette = "viridis")
+verpal <- hcl.colors(n = 21, palette = "viridis")
+
+bcr_names<-colnames(summary_df)
+vlabels<-colnames(summary_df)
+
+for (i in 1:21){
+  df_bcr <- data.table::copy(summary_df)
+  
+  spec <- bcr_names[i]
+  slabel <- vlabels[i]
+  df_bcr <- as.data.frame(df_bcr)
+  df_bcr$spec_col <- df_bcr %>% dplyr::select (as.name(bcr_names[i]))%>% pull()
+  med_val <- median(df_bcr$spec_col)
+  cv <- round(sd(df_bcr$spec_col)/mean(df_bcr$spec_col)*100, 2)
+  n <- sum(!is.na(df_bcr$spec_col))
+  g<-ggplot(df_bcr, aes(WellID, spec_col)) +
+    geom_bar(stat = "identity", fill = verpal[i]) + 
+    geom_hline(yintercept = med_val, linetype = "dashed", color = "red")+
+    scale_y_continuous(sec.axis = dup_axis(breaks = med_val, labels = med_val, name = ""))+
+    xlab("Well") +
+    ylab(slabel) +
+    facet_wrap(~pool_id, ncol = n_distinct(summary_df$pool_id), scales = "free_x", drop = TRUE) +
+    ggtitle(slabel, 
+            subtitle = sprintf("Median=%s    CV=%.1f%%    N=%s", med_val, cv, n)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+     
+  # Output plot
+  suppressWarnings(print(g))
+      
+  # Plot-specific hyperlink definition
+  #cat(sprintf('\n<a id="%s"></a>', spec), labels = "", sep = "\n")
+  
+  # Link back to top of section
+  cat("\n[Return to Contents](#bcr_well_top)", labels = "", sep = "\n")
+  
+  rm(df_bcr, spec, slabel, med_val, cv, n, g)
+    
+}
+```
+
+
+
+<a id= "bcr_clone_summary"></a>  
+
+
+### Clone Type Summary
+
+<a id= "bcr_clone_size"></a>  
+
+#### Clonotype Size Distribution
+
+
+```{r bcr_clone_size_plots, results = "asis", fig.height = 3.5}
+stm("Generating clone size plots")
+
+dt<-do.call(rbind,lapply(contig_files,read.csv))
+
+dt_clone_size<-dt %>%  group_by ( Well_ID, barcode) %>%   
+        tally()%>%  group_by ( Well_ID, n)%>% mutate_if(is.numeric,as.character)
+colnames(dt_clone_size)[3]<-"Clone_Size"
+dt_clone_size$Clone_Size<-as.character(dt_clone_size$Clone_Size)
+pool_id<-substring(gsub("^.*\\P","P",dt_clone_size$Well_ID), 1,2)
+dt_clone_size$pool_id<-pool_id 
+
+ggplot(data = dt_clone_size,aes(x =Well_ID, fill = factor(Clone_Size, levels=unique(dt_clone_size$Clone_Size)[order(nchar(unique(dt_clone_size$Clone_Size)), unique(dt_clone_size$Clone_Size),decreasing = TRUE)])))  +
+    geom_bar( width = 0.8,position = "fill")+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ylab("Percentage")+ scale_fill_discrete(name = "Clone Size")+ylab("Percentage")+
+    facet_wrap(~pool_id, ncol = n_distinct(dt_clone_size$pool_id), scales = "free_x", drop = TRUE)
+            
+cat("\n[Return to Contents](#bcr_well_top)", labels = "", sep = "\n")
+
+
+```  
+
+<a id= "bcr_unique_clone_type"></a>
+
+#### Unique Clonotype
+
+```{r bcr_clone_unique_plots, results = "asis", fig.height = 3.5}
+stm("Generating unique clone type plots")
+
+#dt<-do.call(rbind,lapply(contig_files,fread))
+
+dt_clone_unique<-dt %>%  group_by ( Well_ID, raw_clonotype_id) %>%   
+        tally()            %>%  
+        group_by ( Well_ID)%>%    
+        tally()
+pool_id<-substring(gsub("^.*\\P","P",dt_clone_unique$Well_ID), 1,2)
+dt_clone_unique$pool_id<-pool_id 
+ggplot(data=dt_clone_unique, aes(x=Well_ID, y=n)) +
+  geom_bar(stat="identity", fill="steelblue")+   
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  ylab("Number of Unique Clone Type ")+
+  facet_wrap(~pool_id, ncol = n_distinct(dt_clone_size$pool_id), scales = "free_x", drop = TRUE)
+
+    
+cat("\n[Return to Contents](#bcr_well_top)", labels = "", sep = "\n")
+
+
+```  
+
+
+<a id= "bcr_cdr3_nt_distribution"></a>  
+
+
+#### CDR3 Nucleotide Distribution Summary
+
+```{r bcr_cdr_nt_size_plots, results = "asis", fig.height = 3.5}
+stm("Generating cdr3 nt length distribution plots")
+#dt<-do.call(rbind,lapply(contig_files,fread))
+
+dt$cdr3_nt_length <- str_length(dt$cdr3_nt) 
+pool_id<-substring(gsub("^.*\\P","P",dt$Well_ID), 1,2)
+dt$pool_id<-pool_id 
+
+ggplot(data = dt, aes(x = cdr3_nt_length, fill = Well_ID)) +
+    geom_bar(bin=70,position = "dodge")+ 
+    xlim(10, 80)+
+    facet_wrap(~pool_id, ncol = n_distinct(dt_clone_size$pool_id), scales = "free_x", drop = TRUE)
+
+    
+cat("\n[Return to Contents](#bcr_well_top)", labels = "", sep = "\n")
+
+
+``` 
+
+<a id= "bcr_clone_type_abudance"></a>  
+
+#### Clonotype Abundance Summary
+
+```{r bcr_abundance_plots, results = "asis", fig.height = 3.5,fig.width =12 }
+stm("Generating abundance plots")
+
+#dt<-do.call(rbind,lapply(contig_files,fread))
+abundance<-dt   %>%    group_by ( Well_ID, barcode,raw_clonotype_id) %>%   
+        tally() %>%    group_by ( Well_ID,raw_clonotype_id) %>%   
+        tally() %>%    group_by ( n,Well_ID)%>%    
+        tally()
+
+pool_id<-substring(gsub("^.*\\P","P",abundance$Well_ID), 1,2)
+abundance$pool_id<-pool_id 
+ggplot(abundance, aes(x = n,y = nn,color = Well_ID)) +  
+    geom_line()+ 
+    scale_x_log10(breaks = c(1,2,3,4,5,10,20))+ 
+    scale_y_log10(breaks = c(1,10,100,1000,10000))+
+    ylab("Number of Clonotyoe")+
+    xlab("Abudance")+
+    facet_wrap(~pool_id, ncol = n_distinct(dt_clone_size$pool_id), scales = "free_x", drop = TRUE)
+
+
+
+    
+cat("\n[Return to Contents](#bcr_well_top)", labels = "", sep = "\n")
+
+
+```  
+
+[Return to Contents](#bcr_well_top) 
+
+---  
+
+scBCR seq report well module v.`r {scBCR_seq_well_module_version}`, Qiuyu Gong; Lauren Okada  
+
+```{r scbcr_seq_well_cleanup, include = FALSE}
+module_vars <- setdiff(ls(), orig_workspace)
+rm(list=module_vars)
+
+gc()
+
+```

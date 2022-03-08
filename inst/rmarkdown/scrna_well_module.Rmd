@@ -169,6 +169,21 @@ vnames_arc <- c("estimated_number_of_cells",
   "gex_reads_mapped_confidently_to_genome","gex_reads_mapped_confidently_to_intergenic_regions", "gex_reads_mapped_confidently_to_intronic_regions",
   "gex_reads_mapped_confidently_to_transcriptome","gex_reads_mapped_to_genome","gex_reads_with_tso",
   "gex_sequenced_read_pairs","gex_total_genes_detected","gex_valid_barcodes", "gex_valid_umis")  
+  
+  
+vnames_tcr<-c('cells','confidently mapped antisense','confidently mapped antisense 1',
+              'confidently mapped to exonic regions','confidently mapped to exonic regions 1',
+              'confidently mapped to genome','confidently mapped to genome 1',
+              'confidently mapped to intergenic regions','confidently mapped to intergenic regions 1',
+              'confidently mapped to intronic regions','confidently mapped to intronic regions 1',
+              'confidently mapped to transcriptome','confidently mapped to transcriptome 1',
+              'estimated number of cells','fraction reads in cells','mapped to genome',
+              'mapped to genome 1','mean reads per cell','median genes per cell',
+              'median reads per cell','median umi counts per cell',
+              'number of reads','number of reads 1',
+              'number of reads assigned to the sample','number of reads in the library',
+              'number of short reads skipped','q30 barcodes','q30 rna read','q30 umi',
+              'sequencing saturation','total genes detected','valid barcodes','valid umis')
 
 if(all(vnames_rna %in% colnames(well_info))){
   vnames <- vnames_rna
@@ -204,7 +219,30 @@ if(all(vnames_rna %in% colnames(well_info))){
   
 
     rna_data_type <- "arc"
-} else {
+} else if (all(vnames_tcr %in%  gsub("_", " ", colnames(well_info)))){
+  vnames <- gsub(" ", "_", vnames_tcr)
+  vlabels <- c('Cells','Confidently Mapped Antisense in Sample (%)','Confidently Mapped Antisense in Library (%)',
+          'Confidently Mapped to Exonic Regions in Sample (%)','Confidently Mapped to Exonic Regions in Library (%)',
+          'Confidently Mapped to Genome (%) in Sample','Confidently Mapped to Genome (%)',
+          'Confidently Mapped to Intergenic regions (%) in Sample','Confidently Mapped to Intergenic regions in Library  (%)',
+          'Confidently Mapped to Intronic regions (%) in Sample','Confidently Mapped to Intronic regions in Library (%)',
+          'Confidently Mapped to Transcriptome (%) in Sample','Confidently Mapped to Transcriptome in Library (%)',
+          'Estimated Number of Cells',
+          'Fraction Reads in Cells (%)',
+          'Mapped to Genome in Sample','Mapped to Genome in Library',
+          'Mean Reads per Cell','Median Genes per Cell',
+          'Median Reads per Cell','Median UMI Counts per Cell','Number of Reads in Sample','Number of Reads in Library',
+          'Number of Reads Assigned to the Sample','Number of Reads in the Library','Number of Short Reads Skipped',
+          'Q30 Barcodes (%)','Q30 RNA Read (%)','Q30 UMI (%)','Sequencing Saturation (%)',
+          'Total Genes Detected','Valid Barcodes (%)','Valid UMIs')
+          
+  n_vars <- length(vnames)
+  vartypes <- c(rep("Cells", 1), rep("Mapping", 12), "Cells","Cells",rep("Sequencing", 2),rep("Cells", 4),rep("Sequencing", 12))
+  digitsRound <- c(0,  rep(3, 12), 0, 0, 3, 3,rep(0, 4),rep(3, 12))
+  
+
+    rna_data_type <- "tcr"
+}else {
     vnames <- setdiff( colnames(well_info), c("well_id","pool_id"))
     n_vars <- length(vnames)
     vlabels <- gsub("_"," ", vnames)
@@ -254,7 +292,12 @@ if(rna_data_type == "rna"){
   dplyr::group_by(pool_id) %>%
   dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
             total_sequenced_read_pairs = formatC(sum(gex_sequenced_read_pairs), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
-} else {
+} else if (rna_data_type == "tcr"){
+  pool_info <- well_info %>%
+  dplyr::group_by(pool_id) %>%
+  dplyr::summarize(total_cells = formatC(sum(estimated_number_of_cells), big.mark = ",", digits = 0, format = "f"),
+            total_reads = formatC(sum(number_of_reads), big.mark = ",", digits = 0, format = "f"), .groups = "drop")
+}else {
   print("Warning: No total reads column detected in well metadata")
   pool_info <- well_info %>%  
   dplyr::group_by(pool_id) %>%  
