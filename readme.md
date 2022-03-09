@@ -279,6 +279,16 @@ hashed TEA-seq run:
 
 <img src = "images/file_tree_ngsreport.png" height = "500">
 
+For 5 prime scTCR/BCR, we should remove scatac folder and the two addition input directory should be
+
+under ~/input/tcr/
+
+<img src = "images/TCR_example.png" height = "100">
+
+under ~/input/bcr/
+
+<img src = "images/BCR_example.png" height = "100">
+
 [Return to Contents](#contents)  
 
 <a id="ngs_sample_sheet"></a>
