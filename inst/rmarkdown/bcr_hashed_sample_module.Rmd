@@ -1,7 +1,7 @@
 <a id="bcr_hashing_top"></a>   
 
 ```{r, include=FALSE}  
-orig_workspace <- ls() 
+orig_workspace <- ls()
 
 bcr_sample_module_version <- "1.0.0" #202201024
 ```
@@ -9,51 +9,51 @@ bcr_sample_module_version <- "1.0.0" #202201024
 The following metrics summarize the sequencing and alignment by Sample ID after hto-parsing and filtering for singlet cells.  
 
 
-### Contents 
+### Contents
 
 #### [scBCR Hash-Based Summary](#hto_scBCR_summary)  
    - [scBCR Well Counts per HTO Barcode Plot](#bcr_well_hto_barcode)   
   - [scBCR Well Fraction per HTO Barcode Plot](#bcr_well_fraction_hto_barcode)  
-  
+
 #### [scBCR Sample Clonotype Summary](#sample_scBCR_summary)  
    - [scBCR Clonotype Size](#bcr_sample_clone_size)   
-  - [scBCR Sample Unique Clonotype](#unique_clone_type) 
+  - [scBCR Sample Unique Clonotype](#unique_clone_type)
   - [scBCR Sample CDR3 Nucleotide Distribution Summary](#sample_cdr3_nt_distribution)
   - [scBCR Sample Clonotyoe Abundance](#bcr_sample_clonotype_abundance)
-  
-  
+
+
 ```{r include = FALSE}
 stm("Starting scBCR Hashing Module (sample-level)")
 ```  
-  
+
 Check analysis dependencies  
 ```{r hto_bcr_dependency_check, include = FALSE}  
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(tibble))
 suppressPackageStartupMessages(library(stringr))  
-contig_files <- list.files(path = in_bcr, 
-                               pattern = "Reformated.csv", 
+contig_files <- list.files(path = in_bcr,
+                               pattern = "Reformated.csv",
                                full.names = TRUE, recursive = TRUE)
-assertthat::assert_that(length(contig_files) >0, 
-                        msg = sprintf("Did not detect any scBCR contig files in input bcr directory %s", in_bcr)) 
-                        
-                      
+assertthat::assert_that(length(contig_files) >0,
+                        msg = sprintf("Did not detect any scBCR contig files in input bcr directory %s", in_bcr))
+
+
 assertthat::assert_that(exists("in_config"),
                          msg = "Attempting to scBCR quality with hto module. Missing `in_config` variable definition")
 assertthat::assert_that(file.exists(in_config),
                          msg = sprintf("Attempting to run scBCR quality with hto module. Input file `in_config` [%s] does not exist", in_config))                        
-                        
+
 # check hash folder exists
-assertthat::assert_that(dir.exists(in_hto), 
+assertthat::assert_that(dir.exists(in_hto),
                         msg = "Attempting to run scBCR quality with hto module. Input `in_dir` does not contain 'hto' folder")
 
 assertthat::assert_that(exists("in_key"),
                          msg = "Attempting to run quality with hto module. Missing `in_key` variable definition")
 assertthat::assert_that(file.exists(in_key),
                          msg = sprintf("Attempting to scBCR quality with hto module. Input file `in_key` [%s] does not exist", in_key))                        
-                        
-                        
+
+
 ```   
 
 
@@ -92,14 +92,14 @@ dt<-do.call(rbind,lapply(contig_files,read.csv))
 stm("Reading in hto key for hashed BCR analysis")
 # Read in all hto key to match hto names to barcodes
 hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser")  # Parameterize this value
-in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
-  mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
+in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>%
+  mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>%
   mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% # use HT number value to reorder the HT levels
   select(-hto_order)
 
 # Read in all hto metadata files, check expected numbers vs input well info
-all_hto_meta <- list.files(path = in_hto, 
-                           pattern = "hto_category_table.csv.gz", 
+all_hto_meta <- list.files(path = in_hto,
+                           pattern = "hto_category_table.csv.gz",
                            full.names = TRUE, recursive = TRUE)
 n_hto_meta <- length(all_hto_meta)
 if(n_hto_meta == 0){
@@ -111,7 +111,7 @@ if(n_hto_meta == 0){
   hto_warning_list <- c(hto_warning_list, hto_meta_warn)
 }
 stm(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
-cat(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t"))) 
+cat(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = "\n\t")))
 
 stm("Reading in hto category metadata for hashed BCR analysis")
 hto_meta_list <- lapply(all_hto_meta, fread)
@@ -134,13 +134,14 @@ hto_meta[ , hto_category:= factor(hto_category, levels = c("no_hash", "singlet",
 
 ```{r hto_bcr_merge}
 stm("Merging hto category metadata with bcr contig data")
-dt$well_id<-paste0(dt$Batch_ID,"-",dt$Well_ID)
+#dt$well_id<-paste0(dt$Batch_ID,"-",dt$Well_ID)
+dt$well_id<-paste0(dt$Well_ID)
 dt$cell_barcode<-substr(dt$barcode, 0,16)
 dt<-left_join(dt,hto_meta,by=c("cell_barcode","well_id"))
 dt<-dt %>% filter (hto_category=="singlet")
-unqiue_dt <- unique(dt[ , c("cell_barcode", "well_id")]) 
+unqiue_dt <- unique(dt[ , c("cell_barcode", "well_id")])
 unqiue_dt<-left_join(unqiue_dt,hto_meta,by=c("cell_barcode","well_id"))
-``` 
+```
 
 
 
@@ -174,7 +175,7 @@ colnames(Sample_HTO_Summary)[5]<-"n_singlet_cells"
 qc_table(Sample_HTO_Summary)
 
 ```  
-  
+
 [Return to Contents](#bcr_hashing_top)
 
 
@@ -190,15 +191,15 @@ subchunkify <- function(g, fig_height=7, fig_width=5) {
   g_deparsed <- paste0(deparse(
     function() {g}
   ), collapse = '')
-  
+
   sub_chunk <- paste0("
   `","``{r sub_chunk_", floor(runif(1) * 10000), ", fig.height=", fig_height, ", fig.width=", fig_width, ", echo=FALSE}",
-  "\n(", 
+  "\n(",
     g_deparsed
     , ")()",
   "\n`","``
   ")
-  
+
   cat(knitr::knit(text = knitr::knit_expand(text = sub_chunk), quiet = TRUE))
 }
 
@@ -211,7 +212,7 @@ for (i in seq_along(pools)){
                    name_x = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Number of Cells",
-                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE) 
+                   facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE)
 }
 
 subchunkify(plot_list[[1]],  ceiling(n_pools/2)*4 + 0.4,max(0.6*n_wells + 1*n_pools + 3, 8))
@@ -225,7 +226,7 @@ subchunkify(plot_list[[2]],  ceiling(n_pools/2)*4 + 0.4,max(0.6*n_wells + 1*n_po
 cat("\n[Return to Contents](#bcr_hashing_top)", labels = "", sep = "\n")
 
 
-``` 
+```
 
 <a id= "bcr_well_fraction_hto_barcode"></a>  
 
@@ -244,15 +245,15 @@ bar_g <- qc_stacked_barplot_facet(meta = unqiue_dt,
                    name_x = "HTO/Sample",
                    colorset_y = "varibow",
                    name_y = "Fraction of Cells",
-                   as_fraction = TRUE , 
+                   as_fraction = TRUE ,
                    facet_formula = formula("~pool_id"), nrow = 1, scales ="free_x", drop = TRUE)
-                   
+
 subchunkify(bar_g,  ceiling(n_pools/2)*4 + 0.4,max(0.6*n_wells + 1*n_pools + 3, 8))
 
 cat("\n[Return to Contents](#bcr_hashing_top)", labels = "", sep = "\n")
 
 
-``` 
+```
 
 <a id= "sample_scBCR_summary"></a>  
 
@@ -273,17 +274,17 @@ dt_clone_size<-dt %>%  group_by ( sample_hto_pool, well_id,barcode) %>%
 colnames(dt_clone_size)[4]<-"Clone_Size"
 dt_clone_size$Clone_Size<-as.character(dt_clone_size$Clone_Size)
 pool_id<-substring(gsub("^.*\\P","P",dt_clone_size$sample_hto_pool), 1,2)
-dt_clone_size$pool_id<-pool_id 
+dt_clone_size$pool_id<-pool_id
 
 ggplot(data = dt_clone_size,aes(x =sample_hto_pool, fill = factor(Clone_Size, levels=unique(dt_clone_size$Clone_Size)[order(nchar(unique(dt_clone_size$Clone_Size)), unique(dt_clone_size$Clone_Size),decreasing = TRUE)])))  +
   geom_bar( width = 0.8,position = "fill")+
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ylab("Percentage")+ scale_fill_discrete(name = "Clone Size")+
     facet_wrap(~pool_id, ncol = n_distinct(dt_clone_size$pool_id), scales = "free_x", drop = TRUE)
-            
+
 cat("\n[Return to Contents](#bcr_hashing_top)", labels = "", sep = "\n")
 
 
-``` 
+```
 
 
 
@@ -302,14 +303,14 @@ dt_clone_unique<-dt %>%
         group_by ( sample_hto_pool,Well_ID)%>%    
         tally()
 pool_id<-substring(gsub("^.*\\P","P",dt_clone_unique$Well_ID), 1,2)
-dt_clone_unique$pool_id<-pool_id 
+dt_clone_unique$pool_id<-pool_id
 ggplot(data=dt_clone_unique, aes(x=sample_hto_pool, y=n)) +
   geom_bar(stat="identity", fill="steelblue")+   
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
   ylab("Number of Unique Clone Type ")+
   facet_wrap(~pool_id, ncol = n_distinct(dt_clone_unique$pool_id), scales = "free_x", drop = TRUE)
 
-    
+
 cat("\n[Return to Contents](#bcr_hashing_top)", labels = "", sep = "\n")
 
 
@@ -322,20 +323,20 @@ cat("\n[Return to Contents](#bcr_hashing_top)", labels = "", sep = "\n")
 ```{r bcr_sample_cdr_nt_size_plots, results = "asis", fig.height = 3.5}
 stm("Generating cdr3 nt length distribution plots")
 
-dt$cdr3_nt_length <- str_length(dt$cdr3_nt) 
+dt$cdr3_nt_length <- str_length(dt$cdr3_nt)
 pool_id<-substring(gsub("^.*\\P","P",dt$Well_ID), 1,2)
-dt$pool_id<-pool_id 
+dt$pool_id<-pool_id
 
 ggplot(data = dt, aes(x = cdr3_nt_length, fill = sample_hto_pool)) +
-    geom_bar(bin=70,position = "dodge")+ 
+    geom_bar(bin=70,position = "dodge")+
     xlim(10, 80)+
     facet_wrap(~pool_id, drop = TRUE)
 
-    
+
 cat("\n[Return to Contents](#bcr_well_top)", labels = "", sep = "\n")
 
 
-``` 
+```
 
 
 
@@ -355,11 +356,11 @@ abundance<-dt   %>%    group_by ( Well_ID,sample_hto_pool, barcode,raw_clonotype
         tally()
 
 pool_id<-substring(gsub("^.*\\P","P",abundance$sample_hto_pool), 1,2)
-abundance$pool_id<-pool_id 
+abundance$pool_id<-pool_id
 
 ggplot(abundance, aes(x = n,y = nn,color = sample_hto_pool)) +  
-    geom_line()+ 
-    scale_x_log10(breaks = c(1,2,3,4,5,10,20))+ 
+    geom_line()+
+    scale_x_log10(breaks = c(1,2,3,4,5,10,20))+
     scale_y_log10(breaks = c(1,10,100,1000,10000))+
     ylab("Number of Clonotyoe")+
     xlab("Abundance")+
@@ -370,7 +371,7 @@ cat("\n[Return to Contents](#bcr_hashing_top)", labels = "", sep = "\n")
 
 ```  
 
-[Return to Contents](#bcr_hashing_top) 
+[Return to Contents](#bcr_hashing_top)
 
 ---  
 
