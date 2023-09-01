@@ -34,7 +34,7 @@ Check analysis dependencies
 ```{r hto_tcr_dependency_check, include = FALSE}  
 
 contig_files <- list.files(path = in_tcr,
-                               pattern = "Reformated.csv",
+                               pattern = "Reformatted.csv",
                                full.names = TRUE, recursive = TRUE)
 assertthat::assert_that(length(contig_files) >0,
                         msg = sprintf("Did not detect any TCR contig files in input tcr directory %s", in_tcr))
