@@ -251,7 +251,8 @@ meta$barcode_category[meta$filtered & meta$pass_fail == "pass"] <- "pass_singlet
 ```{r atac_hto_meta_format} 
 stm("Reading in hto key for hashed scATAC analysis")
 # Read in all hto key to match hto names to barcodes
-hto_key <- system.file(file.path("reference", hash_key), package = "HTOparser")  # Parameterize this value
+###hto_key <- system.file(file.path("reference", hash_key), package = "HTOparser")  # Parameterize this value
+
 in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
   mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
   mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% # use HT number value to reorder the HT levels

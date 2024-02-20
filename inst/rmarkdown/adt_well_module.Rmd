@@ -7,7 +7,7 @@ knitr::opts_chunk$set(echo = TRUE)
 adt_module_version <- "1.0.2" # 20211201
 
 stm("Beginning ADT module")
-```  
+```
 
 #### Contents
 
@@ -76,18 +76,18 @@ stm(sprintf("IN POSITIVE ADT Tag Count files: \n\t%s", paste(adt_pos_count_files
 ##### Load Inputs  
 <details style="color: lightgray;"> 
   <summary>Expand output</summary>   
-```{r adt_load inputs, message=F, echo=F}
+```{r adt_load inputs, message=FALSE, echo=FALSE}
 count_list <- lapply(adt_count_filepaths, fread)
 pos_count_list <- lapply(adt_pos_count_filepaths, fread)
 pos_count_list <- lapply(pos_count_list, function(x){
   colnames(x)[1] <- "cell_barcode"
   x
 })
-```  
+```
 
 
 #### Create pos & neg droplet matrices, then create seurat objects
-```{r adt_Create Seurat Objects, message=F, echo=F}
+```{r adt_Create Seurat Objects, message=FALSE, echo=FALSE}
 i = 1
 seurat_list <- list()
 while (i < length(count_list) + 1){
@@ -132,33 +132,33 @@ while (i < length(count_list) + 1){
 
 rm(pos_count_list)  
 
-```  
+```
 
 #### Merge Seurat Objects
-```{r adt_merge seurat objects}  
+```{r adt_merge seurat objects}
 all_merge <- Reduce(merge, seurat_list)
 
 
-```  
+```
 </details>  
 
 <a id="adt_session_prep"></a>  
 
 #### Split Violin Plot
-```{r adt_split violin plot, fig.width=12, fig.height=8, message=F, echo=F}
+```{r adt_split violin plot, fig.width=12, fig.height=8, message=FALSE, echo=FALSE}
 VlnPlot(all_merge, features = 'nCount_RNA', log = T, 
         pt.size = 0, split.plot = T, split.by = 'orig.ident', group.by = 'well') & 
   geom_hline(yintercept=1000, linetype="dashed", color = "blue") &
   geom_hline(yintercept=300, linetype="solid", color = "red") & stat_summary(fun=median, geom="point", size=2, color="green") &
   ggtitle("Count_ADT")
-```  
+```
 
 [Return to Contents](#adt_top) 
 
 <a id= "adt_well_umap_clustering"></a>  
 
 #### UMAP clustering for ADTs
-```{r adt_UMAP Clustering for ADTs, message=F, echo=F}
+```{r adt_UMAP Clustering for ADTs, message=FALSE, echo=FALSE}
 all_merge <- SetIdent(all_merge, value = 'orig.ident')
 adt_positives <- subset(all_merge, idents = 'Cells')
 VariableFeatures(adt_positives) <- rownames(adt_positives)
@@ -174,29 +174,29 @@ adt_positives <- NormalizeData(adt_positives, normalization.method = 'CLR', marg
   ScaleData() %>% RunPCA(npcs = dims)
 adt_positives <- RunUMAP(adt_positives, dims = 1:(dims)) %>% FindNeighbors(dims = 1:dims) %>% FindClusters()
 
-```  
+```
 
 <a id = "adt_umap_bywell"></a>  
 
 ##### UMAP clustering ADTs by Well
 ```{r adt_UMAP clustering ADTs by Well, fig.width=8, fig.height=8}
 DimPlot(adt_positives, group.by = 'well')
-```  
+```
 
 [Return to Contents](#adt_top) 
 
 ```{r adt_dynamically scale adt umap height}
 n_features <- length(rownames(adt_positives))
 height = ceiling((n_features / 3) * 2)
-```  
+```
 
 <a id = "adt_umap_byadt"></a>  
 
 ##### UMAP clustering for ADTs individually
-```{r adt_UMAP clustering for ADTs individually, fig.width=12, fig.height=height, message=F, echo=F}
+```{r adt_UMAP clustering for ADTs individually, fig.width=12, fig.height=height, message=FALSE, echo=FALSE}
 FeaturePlot(adt_positives, features = rownames(adt_positives), min.cutoff = 'q03', max.cutoff = 'q97') & 
   scale_color_viridis(option = 'inferno')
-```  
+```
 [Return to Contents](#adt_top)  
 
 #### ADT UMIs Dataframe construction - start here  
@@ -218,8 +218,8 @@ while (i < length(count_list) + 1){
 
 combined_colsums <- bind_rows(colsums_list, .id = "column_label")
 rm(colsums_list, count_list, seurat_list)
-```  
-  
+```
+
 <a id= "adt_well_umi_plot"></a>  
   
 #### ADT UMIs plot
@@ -231,7 +231,7 @@ ggplot(combined_colsums, aes(x = reorder(ADT, -Count), y = Count, color = Well))
 ggplot(combined_colsums, aes(x = reorder(ADT, -Count), y = Count, color = Well)) + geom_point(size = 5) + 
   geom_hline(yintercept=median(combined_colsums$Count), linetype="dashed", color = "blue") + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  
-```  
+```
 [Return to Contents](#adt_top) 
 
 
@@ -239,11 +239,11 @@ ggplot(combined_colsums, aes(x = reorder(ADT, -Count), y = Count, color = Well))
 
 ADT report module v.`r {adt_module_version}`, Zach Thomson  
 
-```{r adt_well_cleanup, include = FALSE}
+```{r adt_well_cleanup, include=FALSE}
 module_vars <- setdiff(ls(), orig_workspace)
 rm(list = module_vars)
 rm(module_vars)
 
 gc()
 
-``` 
+```

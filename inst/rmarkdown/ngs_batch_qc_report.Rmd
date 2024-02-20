@@ -193,6 +193,25 @@ if(has_hto){
   }
 }
 
+### Set hto_key_path according to file naming convention
+hto_key_path <- file.path(in_hto,paste0(batch_id,"_hto_key.csv"))
+
+### Check if hto_key file has been supplied as parameter and copied to in_hto directory
+
+if(has_hto){
+  if(!file.exists(hto_key_path)){
+    config_list<- batchreporter::load_config(in_config)
+    hash_key <- config_list$hash_key
+    hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser") 
+    stm(paste0('Using default hto key: ', hto_key))
+    print(paste0('Using default hto key: ', hto_key))
+} else {
+    hto_key <- hto_key_path
+    stm(paste0('Using hto key supplied as parameter: ', hto_key))
+    print(paste0('Using hto key supplied as parameter: ', hto_key))
+    }
+  }
+
 ```  
 
 </details> 

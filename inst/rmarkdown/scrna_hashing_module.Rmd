@@ -82,7 +82,8 @@ assertthat::assert_that(exists("sample_column_name"))
 <details style="color: lightgray;">  
   <summary>Expand Code</summary> 
 ```{r rna_hash_files}
-hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser")  # Parameterize this value
+## hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser")  # Parameterize this value
+
 in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
   mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
   mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% # use HT number value to reorder the HT levels

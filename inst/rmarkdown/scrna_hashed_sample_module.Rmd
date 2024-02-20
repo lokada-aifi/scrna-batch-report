@@ -1,6 +1,6 @@
-<a id="rna_hashing_top"></a>   
+f<a id="rna_hashing_top"></a>   
 
-```{r}  
+```{r}
 orig_workspace <- ls() 
 
 scrna_seq_sample_module_version <- "1.0.2" #20211201
@@ -31,11 +31,11 @@ The following metrics summarize the sequencing and alignment by Sample ID after 
 <details style="color: lightgray;">  
   <summary>Expand Code</summary> 
 
-```{r include = FALSE}
+```{r include=FALSE}
 stm("Starting scRNA Hashing Module (sample-level)")
 ```
-  
-```{css style_definitions}
+
+```{css style_definitions, language="css"}
 # Allow display of large images without shrinking to page width
 <style>
   .superbigimage{
@@ -48,10 +48,10 @@ stm("Starting scRNA Hashing Module (sample-level)")
 
 </style>
     
-```  
-  
+```
+
 Check analysis dependencies  
-```{r hto_rna_dependency_check, include = FALSE}
+```{r hto_rna_dependency_check, include=FALSE}
 # check main rna input directory  
 assertthat::assert_that(exists("in_rna"), 
                         msg = "Attempting to run rna quality module. Missing `in_rna` variable definition")
@@ -77,7 +77,7 @@ assertthat::assert_that(exists("in_config"),
 assertthat::assert_that(file.exists(in_config),
                          msg = sprintf("Attempting to run rna quality with hto module. Input file `in_config` [%s] does not exist", in_config))
 
-```   
+```
 
 
 ```{r hto_rna_read_config}
@@ -128,7 +128,7 @@ fct_mito_grp_cutoffs <- c(-Inf, 0.05, 0.10, 0.20, 0.30,Inf)
 fct_mito_grp_labels <- c("0-0.05","0.05-0.10","0.10-0.20","0.20-0.30",">0.30")
 rna_meta$fct_mito_group <- cut(rna_meta$fct_mito_umi, breaks =fct_mito_grp_cutoffs,
                            labels = fct_mito_grp_labels)
-```  
+```
 
 Read in Counts from H5 Files  
 ```{r hto_rna_rna_counts}
@@ -156,13 +156,13 @@ if(!all(order_check)){
 rna_counts <- do.call(cbind, rna_count_list)
 
 featDF <- read_h5_feature_meta(all_h5[1])
-```  
+```
 
 Read in HTO files  
 ```{r hto_rna_hash_files}
 stm("Reading in hto key for hashed RNA analysis")
 # Read in all hto key to match hto names to barcodes
-hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser")  # Parameterize this value
+## hto_key <- system.file(file.path("reference",hash_key), package = "HTOparser")  # Parameterize this value
 in_hto_key <- fread(hto_key, header = FALSE, col.names = c("hto_barcode","hto_name")) %>% 
   mutate(hto_order = as.numeric(gsub("HT","", hto_name))) %>% 
   mutate(hto_name = factor(hto_name, levels = hto_name[order(hto_order)])) %>% # use HT number value to reorder the HT levels
@@ -191,7 +191,7 @@ hto_meta_list <- mapply(function(x,y){x$well_id <- y; x}, hto_meta_list, hto_met
 hto_meta <- do.call(rbind, hto_meta_list)
 rm("hto_meta_list")
 
-```   
+```
 
 Add in HTO Metadata  
 ```{r hto_rna_hto_meta_format}
@@ -207,7 +207,7 @@ hto_meta[ , hto_category:= factor(hto_category, levels = c("no_hash", "singlet",
 
 # hto_meta_singlet <- subset(hto_meta, hto_category=="singlet")
 
-```  
+```
 
 ```{r hto_rna_merge}
 stm("Merging hto category metadata with RNA metadata")
@@ -219,8 +219,8 @@ hto_meta_singlet <- subset(rna_hto_meta, hto_category=="singlet")
 hto_meta_singlet <- as.data.table(hto_meta_singlet)
 hto_meta_singlet_list <- split(hto_meta_singlet, by = sample_column_name)
   
-```  
-  
+```
+
 Sample singlet cells from each well and sample to generate umaps  
 ```{r hto_rna_sampled_cells}
 n_cells_sample <- 2000
@@ -250,7 +250,7 @@ rna_counts_sampled <- do.call(cbind, rna_count_list_sampled)
 
 rm(list=c("rna_count_list", "rna_count_list_sampled","rna_meta_list"))
 
-```  
+```
 
 Logic Check sample sheet value formats against data value formats
 ```{r hto_rna_check_ss_format}
@@ -299,8 +299,8 @@ rna_counts_sampled <- do.call(cbind, rna_count_list_sampled)
 
 rm(list=c("rna_count_list", "rna_count_list_sampled","rna_meta_list"))
 
-``` 
-  
+```
+
 </details>  
   
 <a id="hto_scrna_summary"></a>  
@@ -321,15 +321,15 @@ setcolorder(hto_singlet_summary, c("pool_id",sample_column_name, "hto_name", "ht
 
 qc_table(hto_singlet_summary)
 
-```  
-  
+```
+
 [Return to Contents](#rna_hashing_top)  
 
 <a id="well_hto_barcode"></a> 
 
 #### Well Count per HTO Barcode Plot  
 
-```{r scrna_Count_By_HTO_Barcode_Plot, class.output = "superbigimage", results="asis"}
+```{r scrna_Count_By_HTO_Barcode_Plot, class.output="superbigimage", results="asis"}
 stm("Plotting well count per hto")
 
 plot_list <- list()
@@ -351,14 +351,14 @@ batchreporter::make_subchunk(g, subchunk_name = "scrna_sample_hto_count_subchunk
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE, class.output = "superbigimage"), 
               quiet_knit = TRUE)
 
-```  
-  
+```
+
 [Return to Contents](#rna_hashing_top)  
   
 <a id="well_fraction_hto_barcode"></a> 
 
 #### Well Fraction per HTO Barcode Plot  
-```{r scrna_sampleFraction_By_HTO_Barcode_Plot, class.output = "superbigimage", results="asis"}
+```{r scrna_sampleFraction_By_HTO_Barcode_Plot, class.output="superbigimage", results="asis"}
 stm("Plotting well fraction per hto")
 
 g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
@@ -377,8 +377,8 @@ batchreporter::make_subchunk(g, subchunk_name = "scrna_sample_fraction_subchunk"
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
-```  
-  
+```
+
 [Return to Contents](#rna_hashing_top)  
 
 <a id="count_stats_by_hto"></a> 
@@ -396,7 +396,7 @@ dummy_plot <- function(msg, plottitle="", size = 8){
 }
 ```
 #### Read Counts by HTO Category and Barcode  
-```{r hto_rna_read_counts, results = "asis"}
+```{r hto_rna_read_counts, results="asis"}
 # Reads per hto cat
 stm("Generating sample read count violin plots")
 category_reads_violins <- qc_violin_plot(rna_hto_meta,
@@ -431,11 +431,11 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "scrna_sample_counts_violin
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)
-```   
+```
 <details>  
   <summary>Expand plots of reads/cell distributions by hto and well </summary>  
-  
-```{r Read Count By HTO and Well Violin Plot, class.output = "superbigimage", results="asis"}
+
+```{r Read Count By HTO and Well Violin Plot, class.output="superbigimage", results="asis"}
 stm("Plotting read count violin plots per hto and well")  
 
 all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,  df_key$PoolID))
@@ -478,7 +478,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "reads_well_hto_subchunk",
 
 #### UMI Counts by HTO Category and Barcode  
 
-```{r hto_rna_umi_counts, results = "asis"}
+```{r hto_rna_umi_counts, results="asis"}
 # UMI per category plot
 stm("Generating sample umi count violin plots")
 category_umis_violins <- qc_violin_plot(rna_hto_meta,
@@ -516,11 +516,11 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "scrna_sample_umi_violin_su
                                     warning = FALSE), 
               quiet_knit = TRUE)
 
-```   
+```
 <details>  
   <summary>Expand plots of UMIs/cell distributions per per well by hto </summary>  
-  
-```{r UMI Count By HTO and Well Violin Plot, class.output = "superbigimage", results="asis"}
+
+```{r UMI Count By HTO and Well Violin Plot, class.output="superbigimage", results="asis"}
 stm("Plotting umi count violin plots per hto and well")  
 
 all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,  df_key$PoolID))
@@ -562,7 +562,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "umis_well_hto_subchunk",
 
 #### Gene Counts by HTO Category and Barcode  
 
-```{r hto_rna_gene_counts, results = "asis"}
+```{r hto_rna_gene_counts, results="asis"}
 # Genes per category plot
 category_genes_violins <- qc_violin_plot(rna_hto_meta,
                                          category_x = "hto_category",
@@ -597,12 +597,12 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "scrna_sample_genes_violin_
                                     warning = FALSE), 
               quiet_knit = TRUE)
 
-```  
+```
 
 <details>  
   <summary>Expand plots of genes/cell distributions per per well by hto </summary>  
-  
-```{r Gene Count By HTO and Well Violin Plot, class.output = "superbigimage", results="asis"}
+
+```{r Gene Count By HTO and Well Violin Plot, class.output="superbigimage", results="asis"}
 stm("Plotting gene count violin plots per hto and well")  
 
 all_sample_hto_pool <- unique(sprintf("%s\n%s%s",df_key$HashTag,df_key$SampleID,  df_key$PoolID))
@@ -635,7 +635,7 @@ temp_figheight <- ceiling(n_samples/6)*4 + 0.4
 batchreporter::make_subchunk(g_grid, subchunk_name = "genes_well_hto_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
-```  
+```
 </details>  
   
 <a id="mito_umis_hto" ></a>  
@@ -646,7 +646,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "genes_well_hto_subchunk",
 
 #### Fraction Mitochondrial UMIs  
 
-```{r hto_rna_fct_mito_plot_nohash, results = "asis"}
+```{r hto_rna_fct_mito_plot_nohash, results="asis"}
 g_bar <- ggplot(hto_meta_singlet, aes(!!as.name(sample_column_name),  
                                       fill = factor(fct_mito_group, 
                                                     levels = rev(fct_mito_grp_labels)))) +
@@ -664,13 +664,13 @@ tempwidth <- n_samples*0.4 + 2
 make_subchunk(g_pl, subchunk_name = "scrna_sample_fraction_mito_subchunk", quiet_knit = T,
               chunk_opt_list = list(fig.width = tempwidth, fig.height = 6, echo = FALSE))
 
-```  
+```
 
 <a id="fraction_mito_reads_umi_hto_scatter" ></a>  
 
 #### Fraction Mito UMIs by UMI Counts  
 
-```{r hto_rna_mito_umis_vs_total, results = "asis"}
+```{r hto_rna_mito_umis_vs_total, results="asis"}
 # Reads per hto cat
 stm("Generating mt umi vs umi count scatter plots by well")
 
@@ -697,12 +697,12 @@ temp_figheight <- 2*nrows_plot + 0.3
 make_subchunk(g_mito_umi_sample, subchunk_name = "scrna_sample_fraction_mito_umis_sample_subchunk", quiet_knit = T,
               chunk_opt_list = list(fig.width = temp_figwidth, fig.height = temp_figheight, echo = FALSE))
 
-```  
+```
 
 <details>  
   <summary> Expand Per-Well Plot </summary>  
-  
-```{r hto_rna_mito_umis_vs_umi_well, results = "asis"}
+
+```{r hto_rna_mito_umis_vs_umi_well, results="asis"}
 # Reads per hto cat
 stm("Generating mt umi vs umi count scatter plots per hto and well")
 
@@ -736,7 +736,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "fctmito_umiscatter_well_ht
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
-```  
+```
 </details>   
   
 [Return to Contents](#rna_hashing_top)
@@ -744,7 +744,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "fctmito_umiscatter_well_ht
 <a id="fraction_mito_reads_genes_hto_scatter" ></a>  
 
 #### Fraction Mito UMIs by Gene Counts  
-```{r hto_rna_mito_umis_vs_genes, results = "asis"}
+```{r hto_rna_mito_umis_vs_genes, results="asis"}
 # Genes per hto cat
 stm("Generating mt umi vs gene count scatter plots by well")
 
@@ -771,11 +771,11 @@ temp_figheight <- 2*nrows_plot + 0.3
 make_subchunk(g_mito_genes_sample, subchunk_name = "scrna_sample_fraction_mito_genes_sample_subchunk", quiet_knit = T,
               chunk_opt_list = list(fig.width = temp_figwidth, fig.height = temp_figheight, echo = FALSE))
 
-```  
+```
 
 <details>  
   <summary> Expand Per-Well Plot </summary>  
-```{r hto_rna_mito_umis_vs_genes_well, results = "asis"}
+```{r hto_rna_mito_umis_vs_genes_well, results="asis"}
 # Reads per hto cat
 stm("Generating mt umi vs gene count scatter plots per hto and well")
 
@@ -807,7 +807,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "fctmito_genescatter_well_h
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
-```  
+```
 
 </details>   
 
@@ -818,7 +818,7 @@ batchreporter::make_subchunk(g_grid, subchunk_name = "fctmito_genescatter_well_h
 ### Data Quality UMAP  
 <details style="color: lightgray;">  
   <summary> Expand Code </summary>  
-  
+
 ```{r hto_rna_seurat_normalize}
 # Create Seurat object
 stm("Creating Seurat object from merged data for hashed RNA umap")
@@ -831,7 +831,7 @@ merged_so <- Seurat::NormalizeData(object = merged_so,
                                    scale.factor = 10000,
                                    margin = 1)
 
-```  
+```
 
 ```{r hto_rna_PCA}
 pc_dims <- min(ncol(merged_so) - 1, 50)
@@ -848,7 +848,7 @@ merged_so <- Seurat::RunPCA(object = merged_so, npcs = pc_dims, verbose = FALSE)
 
 ```
 
-```{r hto_rna_jackstraw_pc_selection, message = FALSE}
+```{r hto_rna_jackstraw_pc_selection, message=FALSE}
 # suppressWarnings(future::plan("multiprocess", workers = avail_workers))
 
 stm("Determining dimensionality via jackstraw method for hashed RNA umap")
@@ -915,7 +915,7 @@ umapDF <- umapDF[rownames(merged_so@"meta.data"), , drop = F]
 Batch-level UMAP using `r {nPC}` principal components (`r {cumvar_string}`% explained variance) selected by jackstraw. 
 Singlet cells only, `r {n_cells_sample}` randomly sampled cells per Sample ID.
 
-```{r umap_quality,  results = "asis", fig.height = 30, fig.width = 20, class.output = "superbigimage"}
+```{r umap_quality, results="asis", fig.height=30, fig.width=20, class.output="superbigimage"}
 stm("Plotting Batch UMAP by Data Quality Metrics for hashed RNA")
 
 # Gene scaling
@@ -1013,7 +1013,7 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[5]],
                    ncol = 2)
 
-```  
+```
 
 [Return to Contents](#rna_hashing_top)  
 
@@ -1022,7 +1022,7 @@ cowplot::plot_grid(aligned_plots[[1]],
 scRNA seq report sample module v.`r {scrna_seq_sample_module_version}`, Lauren Okada  
 
 
-```{r scrna_seq_sample_cleanup, include = FALSE}
+```{r scrna_seq_sample_cleanup, include=FALSE}
 module_vars <- setdiff(ls(), orig_workspace)
 rm(list=module_vars)
 
