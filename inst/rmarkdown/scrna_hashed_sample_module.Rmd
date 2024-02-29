@@ -1,9 +1,9 @@
-f<a id="rna_hashing_top"></a>   
+<a id="rna_hashing_top"></a>   
 
 ```{r}
 orig_workspace <- ls() 
 
-scrna_seq_sample_module_version <- "1.0.2" #20211201
+scrna_seq_sample_module_version <- "1.0.2" #20240227
 ```
 
 The following metrics summarize the sequencing and alignment by Sample ID after hto-parsing and filtering for singlet cells.  
@@ -26,6 +26,7 @@ The following metrics summarize the sequencing and alignment by Sample ID after 
   - [Fraction Mito UMIs by Gene Counts](#fraction_mito_reads_genes_hto_scatter)  
   
 #### [Data Quality UMAP](#rna_hash_data_quality_umap)  
+#### [Biological Sex Verification Plots](#biological_sex_verification_plots)
 
 <!-- create details section to collapse multiple no-output code blocks to save space -->
 <details style="color: lightgray;">  
@@ -1012,6 +1013,142 @@ cowplot::plot_grid(aligned_plots[[1]],
                    aligned_plots[[4]],
                    aligned_plots[[5]],
                    ncol = 2)
+
+```
+
+[Return to Contents](#rna_hashing_top) 
+
+<a id="biological_sex_verification_plots"></a>  
+
+### Biological Sex Verification Plots
+#### Gene selected to identify Female samples - XIST : ENSG00000129824
+#### Gene selected to identify Male samples   - RPS4Y1 : ENSG00000229807
+
+```{r sex verification plots function definitions}
+make_dotplot <- function(summary_df, exp = 'avg.exp.scaled'){
+    ggplot(summary_df, aes(id, features.plot, size = pct.exp, color = !!as.name(exp))) +
+        geom_point() +
+        scale_color_viridis_c(option = 'turbo') +
+        theme_bw(base_size = 16) + 
+        scale_y_discrete(position = "right") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+        facet_grid(~subject.biologicalSex, scales = 'free_x', space = 'free') 
+}
+
+make_box <- function(summary_df, y_col = 'avg.exp', ...){
+    ggplot(summary_df, aes(subject.biologicalSex, !!as.name(y_col), color = subject.biologicalSex, label = id)) +
+        geom_point(position = position_jitter(width = 0.3, height = 0)) + 
+        geom_boxplot(alpha = 0, color = 'black') +
+        theme_bw(base_size = 16) +
+        facet_grid(~features.plot, scales = 'free_x', space = 'free', ...) + 
+        theme(axis.text.x = element_text(angle = 60), axis.title.x = element_text(margin = margin(t = 30), size = 8))
+}
+
+```
+
+
+```{r sex verification plot formatting}
+stm('Formating data for sex verification plots')
+
+rna_meta_sampled <- as.data.frame(rna_meta_sampled)
+rownames(rna_meta_sampled) <- rna_meta_sampled$barcodes
+merged_so@meta.data <- rna_meta_sampled
+
+if('subject.biologicalSex' %in% colnames(df_key)) {
+    sample_sex = TRUE
+    sex_meta = df_key[,c('SampleID','subject.biologicalSex')]
+    sex_meta$subject.biologicalSex <- ifelse(! sex_meta$subject.biologicalSex %in% c('Male','Female'), NA, sex_meta$subject.biologicalSex)
+    if(!all(sex_meta$subject.biologicalSex %in% c('Male','Female',NA))) {
+           stm("subject.biologicalSex values expected to be Male, Female or NA. Please check values.")
+           sample_sex = FALSE}
+    } else 
+    {
+    sample_sex = FALSE
+    }
+
+Idents(merged_so) <- 'pbmc_sample_id'
+samples <- levels(merged_so)
+DefaultAssay(merged_so) <- 'RNA'
+
+if(sample_sex) {
+
+    assert_that('SampleID' %in% colnames(sex_meta))
+    assert_that('subject.biologicalSex' %in% colnames(sex_meta)) 
+    
+    if(! all(samples %in% sex_meta$SampleID)) { 
+        stm('Samples in batch do not match samples in sex metadata provided')
+        stm('Ignoring sample sex metadata provided')
+        sample_sex = FALSE
+    }
+
+}
+
+gene_ids <- rownames(merged_so@assays$RNA@data)[1]
+
+female_gene <- 'XIST'
+male_gene <- 'RPS4Y1'
+
+if(grepl('ENSG', gene_ids, fixed = TRUE)) { 
+    female_gene <- 'ENSG00000129824'
+    male_gene <- 'ENSG00000229807'
+}
+
+keep_genes <- c(male_gene, female_gene)
+
+plot <- DotPlot(object = merged_so, features = keep_genes, group.by = 'pbmc_sample_id')
+plot_data <- plot$data
+rownames(plot_data) <- NULL
+
+if(sample_sex) {
+    plot_data_merged <- left_join(plot_data, sex_meta, by = c("id" = "SampleID")) 
+} else {
+        plot_data_merged <- plot_data
+        plot_data_merged$subject.biologicalSex <- NA    
+    }
+
+ord <- filter(plot_data_merged, features.plot == female_gene)
+order <- ord[order(ord$pct.exp, decreasing = FALSE), ]
+order <- order$id
+
+plot_data_merged <- plot_data_merged %>% mutate(id = factor(id, levels = order))
+
+#plotdim(15,6)
+p1 <- make_dotplot(plot_data_merged, exp = 'avg.exp.scaled') + 
+ggtitle(label = paste0("Sex based gene expression in ", unique(merged_so$pool_id)))
+
+if(sample_sex) {
+    avg_exp_box <- make_box(plot_data_merged, y_col = 'avg.exp') +  
+    ggtitle(label = paste0("Average exp of sex based markers in ", unique(merged_so$pool_id))) + 
+    theme(plot.title = element_text(margin = margin(0,0,30,0))) 
+    avg_plotly <- suppressWarnings(ggplotly(avg_exp_box, tooltip = 'id'))
+    p2 <- avg_plotly
+}
+
+if(sample_sex) {
+    pct_exp_box <- make_box(plot_data_merged, y_col = 'pct.exp')  +  
+    ggtitle(label = paste0("Percent exp of sex based markers in ", unique(merged_so$pool_id))) + 
+    theme(plot.title = element_text(margin = margin(0,0,30,0)))
+    pct_plotly <- suppressWarnings(ggplotly(pct_exp_box, tooltip = 'id'))
+    p3 <- pct_plotly
+}
+
+```
+
+```{r sex_verification_dot_plot, results="asis", fig.height=8, fig.width=18, class.output="superbigimage"}
+
+stm("Plotting Sex Verification Dot Plot")
+print(p1)
+
+```
+
+```{r sex_verification_box_plots, results="asis", fig.width=18}
+
+boxplots = list(p2,p3)
+
+if(sample_sex) {
+    stm("Plotting Sex Verification Box Plots")
+    htmltools::tagList(boxplots)
+}
 
 ```
 

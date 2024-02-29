@@ -16,7 +16,7 @@ params:
   in_config: NULL 
   out_dir: NULL
   ngs_report_version: 1.0.0
----  
+---
 
 # {.tabset}  
 
@@ -24,8 +24,8 @@ params:
 <!-- create details section to collapse multiple no-output code blocks to save space -->
 <details style="color: lightgray;"> 
   <summary>Expand Code</summary> 
-  
-```{r setup, include = TRUE}
+
+```{r setup, include=TRUE}
 # Load Libraries
 start_time_all <- Sys.time()
 
@@ -53,11 +53,12 @@ quiet_library(purrr)
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 quiet_library(Seurat)
+quiet_library(assertthat)
 
 stm("Starting NGS Batch Report")
 
 stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))  
-```  
+```
 
 Argument Parsing  
 ```{r parse_arguments}
@@ -100,7 +101,7 @@ print(paste0("IN Sample Key   : ", in_key))
 print(paste0("IN Config       : ", in_config))
 print(paste0("IN Batch Processing Info : ", in_batch_meta))
 print(paste0("OUT Dir         : ", out_dir))
-```  
+```
 
 Check input files  
 ```{r check_input_main}
@@ -161,7 +162,7 @@ has_atac <- "scatac" %in% in_method
 has_adt <- "adt" %in% in_method
 has_hto <- "hto" %in% in_method
 
-```  
+```
 
 Define and check input folder expectations  
 ```{r define_input_folders}
@@ -212,13 +213,13 @@ if(has_hto){
     }
   }
 
-```  
+```
 
 </details> 
 
 ### Batch Information    
 
-```{r batchinfo, include = TRUE}
+```{r batchinfo, include=TRUE}
 stm("Constructing Batch Information table")
 
 # Summarize batch information, also declare some global batch variables that are used throughout the report
@@ -255,11 +256,11 @@ values <-  c(batch_id, in_method_string, n_study_samples, n_pools_label, n_wells
 
 simple_html_table(labels, values, fontsize = 3, col_widths_px = c(175, 850))
 
-```  
+```
 
 ### Batch Processing  
 
-```{r display_processing_details, results = "asis"}
+```{r display_processing_details, results="asis"}
 if(!is.na(in_batch_meta)){
   if(!file.exists(in_batch_meta)) {stop(sprintf("Supplied in_batch_meta file '%s' does not exist. ",in_batch_meta))}
   meta_table <- jsonlite::read_json(in_batch_meta)
@@ -273,71 +274,71 @@ if(!is.na(in_batch_meta)){
 } else {
   cat("No processing details supplied")
 }  
-```   
+```
 
-```{r hashing_tab, results = "asis", eval = has_hto, echo = FALSE}
+```{r hashing_tab, echo=FALSE, results="asis", eval=has_hto}
 cat("## Cell Hashing", sep = "\n")
 
-```  
+```
 
-```{r hashing_child, child = system.file("rmarkdown/hto_module.Rmd", package = "batchreporter"), eval = has_hto}
+```{r hashing_child, child=system.file("rmarkdown/hto_module.Rmd", package = "batchreporter"), eval=has_hto}
 
-```  
+```
 
-```{r scrna_tab, results = "asis", eval = has_rna, echo = FALSE}
+```{r scrna_tab, echo=FALSE, results="asis", eval=has_rna}
 cat("## scRNA Well", sep = "\n")
 
-```  
+```
 
-```{r scrna_seq_child, child =  system.file("rmarkdown/scrna_well_module.Rmd", package = "batchreporter"), eval = has_rna}
+```{r scrna_seq_child, child=system.file("rmarkdown/scrna_well_module.Rmd", package = "batchreporter"), eval=has_rna}
 
-```   
+```
 
-```{r scrna_hto_tab, results = "asis", eval = has_rna & has_hto, echo = FALSE}
+```{r scrna_hto_tab, echo=FALSE, results="asis", eval=has_rna & has_hto}
 cat("## scRNA Sample", sep = "\n")
 
-```   
+```
 
-```{r hashed_rna_child, child = system.file("rmarkdown/scrna_hashed_sample_module.Rmd", package = "batchreporter"),eval = has_rna & has_hto}
+```{r hashed_rna_child, child=system.file("rmarkdown/scrna_hashed_sample_module.Rmd", package = "batchreporter"), eval=has_rna & has_hto}
 
-``` 
+```
 
-```{r adt_tab, results = "asis", eval = has_adt, echo = FALSE}
+```{r adt_tab, echo=FALSE, results="asis", eval=has_adt}
 cat("## ADT Well", sep = "\n")
 
-```  
+```
 
-```{r adt_child, child = system.file("rmarkdown/adt_well_module.Rmd", package = "batchreporter"), eval = has_adt}
+```{r adt_child, child=system.file("rmarkdown/adt_well_module.Rmd", package = "batchreporter"), eval=has_adt}
 
-```   
+```
 
-```{r hashed_adt_tab, results = "asis", eval = has_adt & has_hto, echo = FALSE}
+```{r hashed_adt_tab, echo=FALSE, results="asis", eval=has_adt & has_hto}
 cat("## ADT Sample", sep = "\n")
 
 ```
 
-```{r hashed_adt_child, child = system.file("rmarkdown/adt_hashed_sample_module.Rmd", package = "batchreporter"), eval = has_adt & has_hto}
+```{r hashed_adt_child, child=system.file("rmarkdown/adt_hashed_sample_module.Rmd", package = "batchreporter"), eval=has_adt & has_hto}
 
 ```
 
-```{r atac_tab, results = "asis", eval = has_atac, echo = FALSE}
+```{r atac_tab, echo=FALSE, results="asis", eval=has_atac}
 cat("## scATAC Well", sep = "\n")
 
-```  
+```
 
-```{r atac_child, child =  system.file("rmarkdown/scatac_seq_module.Rmd", package = "batchreporter"), eval =  has_atac}
+```{r atac_child, child=system.file("rmarkdown/scatac_seq_module.Rmd", package = "batchreporter"), eval=has_atac}
 
-```   
+```
 
-```{r hashed_atac_tab, results = "asis", eval = has_atac & has_hto, echo = FALSE}
+```{r hashed_atac_tab, echo=FALSE, results="asis", eval=has_atac & has_hto}
 cat("## scATAC Sample", sep = "\n")
 
-```  
-  
-```{r hashed_atac_child, child = system.file("rmarkdown/scatac_hashing_module.Rmd", package = "batchreporter"), eval = has_atac & has_hto}
+```
 
-```   
-  
+```{r hashed_atac_child, child=system.file("rmarkdown/scatac_hashing_module.Rmd", package = "batchreporter"), eval=has_atac & has_hto}
+
+```
+
 ## Session Information   
 
 <a id="top_session_info"></a>  
@@ -347,7 +348,7 @@ Input Directory:
 ```{r echo_in_dir}
 in_dir 
 
-```  
+```
 Input Directory Contents:  
 
 ```{r echo_in_files}
@@ -359,32 +360,32 @@ file_list <- lapply(folders, function(x){
 names(file_list) <- basename(folders)
 file_list
 
-```  
+```
 
 Batch processing metadata:  
 
 ```{r echo_processing_method}
 in_batch_meta 
 
-```  
+```
 
 Config File:  
 ```{r echo_config_files}
 in_config
 
-```  
+```
 
 Key File:  
 ```{r echo_key_files}
 in_key
 
-```  
+```
 
 Output Directory:  
 ```{r echo_out_dir}
 out_dir
 
-``` 
+```
 
 Session Info:  
 ```{r session_info_main}
@@ -401,7 +402,7 @@ time_message_all <- paste0("Elapsed Time: ",
 print(time_message_all)
 stm(time_message_all)
 stm("Batch report process complete.")
-```  
+```
 
 [Return to Top](#top_session_info)
 
