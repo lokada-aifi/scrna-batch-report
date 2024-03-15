@@ -60,8 +60,10 @@ rmd_path <- file.path(args$out_dir,
                       paste0(args$batch_id,
                              "_ngs_batch_qc_report.Rmd"))
 
-file.copy(system.file("rmarkdown/ngs_batch_qc_report.Rmd", package = "batchreporter"),
-          rmd_path,
+message(paste("Generating ngs_batch_qc_report.Rmd into", rmd_path))
+message(paste("Current working directory", getwd()))
+
+file.copy("batchreporter/inst/rmarkdown/ngs_batch_qc_report.Rmd", rmd_path,
           overwrite = TRUE)
 
 rmarkdown::render(
@@ -78,4 +80,3 @@ rmarkdown::render(
 )
 
 file.remove(rmd_path)
-
