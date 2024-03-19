@@ -64,10 +64,10 @@ Argument Parsing
 # give input directory rna-specific name 
 if(is.null(params$in_dir)) {
   batch_id <- "X070"
-  in_dir <- system.file("batchreporter/inst/extdata/X070")
-  in_key <- system.file("batchreporter/inst/extdata/example_sample_key_X070.csv")
-  in_config <- system.file("batchreporter/inst/extdata/default_rna_config_v1.csv")
-  in_batch_meta <- system.file("batchreporter/inst/extdata/batch-metadata.json")
+  in_dir <- "batchreporter/inst/extdata/X070"
+  in_key <- "batchreporter/inst/extdata/example_sample_key_X070.csv"
+  in_config <- "batchreporter/inst/extdata/default_rna_config_v1.csv"
+  in_batch_meta <- "batchreporter/inst/extdata/batch-metadata.json"
   in_method_string <- "scrna;scatac;adt;hto"
   out_dir <- tempdir()
 } else {
@@ -77,7 +77,7 @@ if(is.null(params$in_dir)) {
   in_key <- params$in_key  
   in_config <- params$in_config  
   if(is.null(in_config)){
-      in_config <- system.file("batchreporter/inst/extdata/default_rna_config_v1.csv")
+      in_config <- "batchreporter/inst/extdata/default_rna_config_v1.csv"
       stm("No config file provided. Using default_rna_config_v1.csv for pbmc data")
   }
   out_dir <- params$out_dir

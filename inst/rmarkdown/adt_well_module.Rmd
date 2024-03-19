@@ -46,7 +46,7 @@ stm("Identifying files for ADT analysis")
 # Input directory in_adt should be defined in the parent Rmarkdown report.
 if(is.null(in_adt)) {
   warning("No input directory for adt batch report, defaulting to test data")
-  in_adt <- system.file("batchreporter/inst/extdata/X070/adt")
+  in_adt <- "batchreporter/inst/extdata/X070/adt"
 } 
 
 adt_count_files <- list.files(in_adt,
