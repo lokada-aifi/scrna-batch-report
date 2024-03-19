@@ -36,11 +36,11 @@ quiet_library(data.table)
 # For testing purposes
 if(is.null(in_adt)) {
   warning("No input directory for adt batch report, defaulting to test data")
-  in_adt <- "batchreporter/inst/extdata/X070/adt"
+  in_adt <- "/batchreporter/inst/extdata/X070/adt"
 } 
 if(is.null(in_hto)) {
   warning("No input directory for hto batch report, defaulting to test data")
-  in_hto <- "batchreporter/inst/extdata/X070/hto"
+  in_hto <- "/batchreporter/inst/extdata/X070/hto"
 } 
 
 #create lists for future mapply functions

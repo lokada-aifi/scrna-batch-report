@@ -64,10 +64,10 @@ Argument Parsing
 # give input directory rna-specific name 
 if(is.null(params$in_dir)) {
   batch_id <- "X070"
-  in_dir <- "batchreporter/inst/extdata/X070"
-  in_key <- "batchreporter/inst/extdata/example_sample_key_X070.csv"
-  in_config <- "batchreporter/inst/extdata/default_rna_config_v1.csv"
-  in_batch_meta <- "batchreporter/inst/extdata/batch-metadata.json"
+  in_dir <- "/batchreporter/inst/extdata/X070"
+  in_key <- "/batchreporter/inst/extdata/example_sample_key_X070.csv"
+  in_config <- "/batchreporter/inst/extdata/default_rna_config_v1.csv"
+  in_batch_meta <- "/batchreporter/inst/extdata/batch-metadata.json"
   in_method_string <- "scrna;scatac;adt;hto"
   out_dir <- tempdir()
 } else {
@@ -77,7 +77,7 @@ if(is.null(params$in_dir)) {
   in_key <- params$in_key  
   in_config <- params$in_config  
   if(is.null(in_config)){
-      in_config <- "batchreporter/inst/extdata/default_rna_config_v1.csv"
+      in_config <- "/batchreporter/inst/extdata/default_rna_config_v1.csv"
       stm("No config file provided. Using default_rna_config_v1.csv for pbmc data")
   }
   out_dir <- params$out_dir
@@ -280,7 +280,7 @@ cat("## Cell Hashing", sep = "\n")
 
 ```
 
-```{r hashing_child, child=system.file("batchreporter/inst/rmarkdown/hto_module.Rmd"), eval=has_hto}
+```{r hashing_child, child="/batchreporter/inst/rmarkdown/hto_module.Rmd", eval=has_hto}
 
 ```
 
@@ -289,7 +289,7 @@ cat("## scRNA Well", sep = "\n")
 
 ```
 
-```{r scrna_seq_child, child=system.file("batchreporter/inst/rmarkdown/scrna_well_module.Rmd"), eval=has_rna}
+```{r scrna_seq_child, child="/batchreporter/inst/rmarkdown/scrna_well_module.Rmd", eval=has_rna}
 
 ```
 
@@ -298,7 +298,7 @@ cat("## scRNA Sample", sep = "\n")
 
 ```
 
-```{r hashed_rna_child, child=system.file("batchreporter/inst/rmarkdown/scrna_hashed_sample_module.Rmd"), eval=has_rna & has_hto}
+```{r hashed_rna_child, child="/batchreporter/inst/rmarkdown/scrna_hashed_sample_module.Rmd", eval=has_rna & has_hto}
 
 ```
 
@@ -307,7 +307,7 @@ cat("## ADT Well", sep = "\n")
 
 ```
 
-```{r adt_child, child=system.file("batchreporter/inst/rmarkdown/adt_well_module.Rmd"), eval=has_adt}
+```{r adt_child, child="/batchreporter/inst/rmarkdown/adt_well_module.Rmd", eval=has_adt}
 
 ```
 
@@ -316,7 +316,7 @@ cat("## ADT Sample", sep = "\n")
 
 ```
 
-```{r hashed_adt_child, child=system.file("batchreporter/inst/rmarkdown/adt_hashed_sample_module.Rmd"), eval=has_adt & has_hto}
+```{r hashed_adt_child, child="/batchreporter/inst/rmarkdown/adt_hashed_sample_module.Rmd", eval=has_adt & has_hto}
 
 ```
 
@@ -325,7 +325,7 @@ cat("## scATAC Well", sep = "\n")
 
 ```
 
-```{r atac_child, child=system.file("batchreporter/inst/rmarkdown/scatac_seq_module.Rmd"), eval=has_atac}
+```{r atac_child, child="/batchreporter/inst/rmarkdown/scatac_seq_module.Rmd", eval=has_atac}
 
 ```
 
@@ -334,7 +334,7 @@ cat("## scATAC Sample", sep = "\n")
 
 ```
 
-```{r hashed_atac_child, child=system.file("batchreporter/inst/rmarkdown/scatac_hashing_module.Rmd"), eval=has_atac & has_hto}
+```{r hashed_atac_child, child="/batchreporter/inst/rmarkdown/scatac_hashing_module.Rmd", eval=has_atac & has_hto}
 
 ```
 

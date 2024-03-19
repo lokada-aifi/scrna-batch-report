@@ -76,10 +76,10 @@ stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n
 # give input directory rna-specific name 
 if(is.null(params$in_dir)) {
   batch <- "X002"
-  rna_in_dir <- "batchreporter/inst/extdata/X002"
-  in_key <- "batchreporter/inst/extdata/example_sample_key_X002.csv"
-  in_config <- "batchreporter/inst/extdata/default_rna_config_v1.csv"
-  in_batch_meta <- "batchreporter/inst/extdata/batch-metadata.json"
+  rna_in_dir <- "/batchreporter/inst/extdata/X002"
+  in_key <- "/batchreporter/inst/extdata/example_sample_key_X002.csv"
+  in_config <- "/batchreporter/inst/extdata/default_rna_config_v1.csv"
+  in_batch_meta <- "/batchreporter/inst/extdata/batch-metadata.json"
   out_dir <- tempdir()
 } else {
   batch <-  params$batch
@@ -87,7 +87,7 @@ if(is.null(params$in_dir)) {
   in_key <- params$in_key
   in_config <- params$in_config
   if(is.null(in_config)){
-      in_config <- "batchreporter/inst/extdata/default_rna_config_v1.csv"
+      in_config <- "/batchreporter/inst/extdata/default_rna_config_v1.csv"
       stm("No config file provided. Using default_rna_config_v1.csv for pbmc data")
   }
   out_dir <- params$out_dir
@@ -341,13 +341,13 @@ if(!is.na(in_batch_meta)){
 
 ### Well Sequencing and Alignment {.active}  
 
-```{r scrna_seq_child, child =  "batchreporter/inst/rmarkdown/scrna_seq_module.Rmd"}
+```{r scrna_seq_child, child = "/batchreporter/inst/rmarkdown/scrna_seq_module.Rmd"}
 
 ```
   
 ### Cell Hashing 
 
-```{r scrna_hashing_child, child = "batchreporter/inst/rmarkdown/scrna_hashing_module.Rmd"} 
+```{r scrna_hashing_child, child = "/batchreporter/inst/rmarkdown/scrna_hashing_module.Rmd"} 
 
 ```
 
