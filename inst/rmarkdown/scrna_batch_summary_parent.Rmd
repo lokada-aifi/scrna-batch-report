@@ -39,7 +39,6 @@ quiet_library <- function(...) {
   suppressPackageStartupMessages(library(...))
 }
 
-quiet_library(batchreporter)
 quiet_library(Matrix)        # dependency of H5weaver
 quiet_library(rhdf5)         # dependency of H5weaver
 quiet_library(H5weaver)      # aifi package
@@ -77,10 +76,10 @@ stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n
 # give input directory rna-specific name 
 if(is.null(params$in_dir)) {
   batch <- "X002"
-  rna_in_dir <- system.file("extdata/X002", package = "batchreporter")
-  in_key <- system.file("extdata/example_sample_key_X002.csv", package = "batchreporter")
-  in_config <- system.file("extdata/default_rna_config_v1.csv", package = "batchreporter")
-  in_batch_meta <- system.file("extdata/batch-metadata.json", package = "batchreporter")
+  rna_in_dir <- system.file("batchreporter/inst/extdata/X002")
+  in_key <- system.file("batchreporter/inst/extdata/example_sample_key_X002.csv")
+  in_config <- system.file("batchreporter/inst/extdata/default_rna_config_v1.csv")
+  in_batch_meta <- system.file("batchreporter/inst/extdata/batch-metadata.json")
   out_dir <- tempdir()
 } else {
   batch <-  params$batch
@@ -88,7 +87,7 @@ if(is.null(params$in_dir)) {
   in_key <- params$in_key
   in_config <- params$in_config
   if(is.null(in_config)){
-      in_config <- system.file("extdata/default_rna_config_v1.csv", package = "batchreporter")
+      in_config <- system.file("batchreporter/inst/extdata/default_rna_config_v1.csv")
       stm("No config file provided. Using default_rna_config_v1.csv for pbmc data")
   }
   out_dir <- params$out_dir
@@ -125,7 +124,7 @@ stm(paste0("OUT Dir         : ", out_dir))
 
 
 ```{r variable_definitions}
-cnfg <- load_config(in_config = in_config)
+cnfg <- load_config(in_config)
 expected_parameters <- c("fct_mito_umi_threshold",
                          "sample_column_name",
                          "hash_key",
@@ -342,13 +341,13 @@ if(!is.na(in_batch_meta)){
 
 ### Well Sequencing and Alignment {.active}  
 
-```{r scrna_seq_child, child =  system.file("rmarkdown/scrna_seq_module.Rmd", package = "batchreporter")}
+```{r scrna_seq_child, child =  system.file("batchreporter/inst/rmarkdown/scrna_seq_module.Rmd")}
 
 ```
   
 ### Cell Hashing 
 
-```{r scrna_hashing_child, child = system.file("rmarkdown/scrna_hashing_module.Rmd", package = "batchreporter")} 
+```{r scrna_hashing_child, child = system.file("batchreporter/inst/rmarkdown/scrna_hashing_module.Rmd")} 
 
 ```
 
@@ -656,7 +655,7 @@ stm("Plotting Seurat labeling score distributions")
 
 # load cell color palette
 cell_labels <- unique(meta[,get(cell_label_column_name)])
-cell_type_palette <- batchreporter::get_cell_label_palette(cell_label_method = cell_label_method,
+cell_type_palette <- get_cell_label_palette(cell_label_method = cell_label_method,
                                                            cell_labels = cell_labels)
                                                             
 # quality scores by sample
@@ -1078,7 +1077,7 @@ labels_order_ctrl <- all_control[,get(cell_label_column_name)][match(all_control
 # labels_order_ctrl <- all_control$seurat_pbmc_type[match(all_control$barcodes,colnames(ctrl_so))]
 names(labels_order_ctrl) <- colnames(ctrl_so)
 
-jackstraw_cells_ctrl <- batchreporter::sample_cells(labels_order_ctrl, 100)
+jackstraw_cells_ctrl <- sample_cells(labels_order_ctrl, 100)
 jackstraw_so_ctrl <- ctrl_so[,jackstraw_cells_ctrl]
 
 jackstraw_so_ctrl <- JackStraw(object = jackstraw_so_ctrl, 

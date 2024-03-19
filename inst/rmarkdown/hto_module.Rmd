@@ -75,7 +75,7 @@ assertthat::assert_that(file.exists(in_config),
 
 ```{r hto_read_config}
 # Config
-config_list<- batchreporter::load_config(in_config)
+config_list<- load_config(in_config)
 
 hash_key <- config_list$hash_key
 sample_column_name <- config_list$sample_column_name
@@ -484,7 +484,7 @@ for (i in seq_along(pools)){
   temp_height <- get_plt_ht_temp(n_well_pool = length(unique(df$well_id)), n_hto = length(unique(df$hto)))
   
   # Output plot with custom chunk format
-  batchreporter::make_subchunk(g_ridge, subchunk_name = paste0("ridge_", i), 
+ make_subchunk(g_ridge, subchunk_name = paste0("ridge_", i), 
                 chunk_opt_list = list(fig.height = temp_height, fig.width = 18, warning = FALSE), 
                 quiet_knit = TRUE)
                 
@@ -689,7 +689,7 @@ g <- qc_aligned_barplot_facet(meta = hto_meta_singlet,
 
 temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 2, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
-batchreporter::make_subchunk(g, subchunk_name = "hto_cat_count_subchunk", 
+make_subchunk(g, subchunk_name = "hto_cat_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)  
               
@@ -719,7 +719,7 @@ g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
 
 temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
-batchreporter::make_subchunk(g, subchunk_name = "hto_fraction_subchunk", 
+make_subchunk(g, subchunk_name = "hto_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
               
@@ -775,7 +775,7 @@ g <- qc_aligned_barplot_facet(meta = hto_meta_singlet,
 
 temp_figwidth <- max(0.32*n_samples + 0.5*n_pools + 2, 4)
 temp_figheight <- max(ceiling(n_pools/2)*((n_wells/n_pools)/3) + 0.4, 4.5)
-batchreporter::make_subchunk(g, subchunk_name = "well_count_subchunk", 
+make_subchunk(g, subchunk_name = "well_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)  
               
@@ -803,7 +803,7 @@ g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
 
 temp_figwidth <- max(0.32*n_samples + 0.5*n_pools + 2, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
-batchreporter::make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
+make_subchunk(g, subchunk_name = "well_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 

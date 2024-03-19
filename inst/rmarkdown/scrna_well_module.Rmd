@@ -401,7 +401,7 @@ g_read <- qc_violin_plot(rna_meta,
 temp_figwidth = max(5, 0.5 + n_wells*0.4)
 temp_figheight = 4
 
-batchreporter::make_subchunk(g_read, subchunk_name = "well_read_violin_subchunk", 
+make_subchunk(g_read, subchunk_name = "well_read_violin_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)
@@ -432,7 +432,7 @@ g_umi <- qc_violin_plot(rna_meta,
 temp_figwidth = max(5, 0.5 + n_wells*0.4)
 temp_figheight = 4
 
-batchreporter::make_subchunk(g_umi, subchunk_name = "well_umi_violin_subchunk", 
+make_subchunk(g_umi, subchunk_name = "well_umi_violin_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)
@@ -462,7 +462,7 @@ g_genes <- qc_violin_plot(rna_meta,
 temp_figwidth = max(5, 0.5 + n_wells*0.4)
 temp_figheight = 4
 
-batchreporter::make_subchunk(g_genes, subchunk_name = "well_gene_violin_subchunk", 
+make_subchunk(g_genes, subchunk_name = "well_gene_violin_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)

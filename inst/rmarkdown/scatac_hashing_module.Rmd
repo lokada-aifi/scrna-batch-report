@@ -175,7 +175,7 @@ cat(paste0("IN HTO Metadata Files        :\n\t", paste(all_hto_meta, collapse = 
 Config
 ```{r hto_atac_read_config}
 # Config
-config_list<- batchreporter::load_config(in_config)
+config_list<- load_config(in_config)
 
 hash_key <- config_list$hash_key
 sample_column_name <- config_list$sample_column_name
@@ -351,7 +351,7 @@ qc_list <- list(report_type = "atac_batch_qc",
                 report_datetime = as.character(start_time_atac_hash),
                 report_uuid = ids::uuid(use_time = TRUE),
                 package = "batchreporter",
-                package_version = sessionInfo()$otherPkgs$batchreporter$Version,
+                package_version = "1.1.6",
                 batch_id = sub("_.+","",sample_names[1]))
 
 out_json <- paste0(out_prefix, "atac_hashing_batch_qc_metrics.json")

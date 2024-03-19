@@ -83,7 +83,7 @@ assertthat::assert_that(file.exists(in_config),
 
 ```{r hto_rna_read_config}
 # Config
-config_list<- batchreporter::load_config(in_config)
+config_list<- load_config(in_config)
 
 hash_key <- config_list$hash_key
 sample_column_name <- config_list$sample_column_name
@@ -348,7 +348,7 @@ for (i in seq_along(pools)){
 g <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 temp_figwidth <- max(0.6*n_wells + 1*n_pools + 3, 8)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
-batchreporter::make_subchunk(g, subchunk_name = "scrna_sample_hto_count_subchunk", 
+make_subchunk(g, subchunk_name = "scrna_sample_hto_count_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE, class.output = "superbigimage"), 
               quiet_knit = TRUE)
 
@@ -374,7 +374,7 @@ g <- qc_stacked_barplot_facet(meta = hto_meta_singlet,
 
 temp_figwidth <- max(0.3*n_wells + 0.5*n_pools + 1.5, 4)
 temp_figheight <- ceiling(n_pools/2)*4 + 0.4
-batchreporter::make_subchunk(g, subchunk_name = "scrna_sample_fraction_subchunk", 
+make_subchunk(g, subchunk_name = "scrna_sample_fraction_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
@@ -428,7 +428,7 @@ g_grid <- plot_grid(plotlist = reads_violin_list,
 temp_figwidth = 3 + n_samples*0.4
 temp_figheight = 4
 
-batchreporter::make_subchunk(g_grid, subchunk_name = "scrna_sample_counts_violin_subchunk", 
+make_subchunk(g_grid, subchunk_name = "scrna_sample_counts_violin_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)
@@ -466,7 +466,7 @@ g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 6)
 
 temp_figwidth <- 15
 temp_figheight <- ceiling(n_samples/6)*4 + 0.4
-batchreporter::make_subchunk(g_grid, subchunk_name = "reads_well_hto_subchunk", 
+make_subchunk(g_grid, subchunk_name = "reads_well_hto_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
@@ -512,7 +512,7 @@ g_grid <- plot_grid(plotlist = umis_violin_list,
 temp_figwidth = 3 + n_samples*0.4
 temp_figheight = 4
 
-batchreporter::make_subchunk(g_grid, subchunk_name = "scrna_sample_umi_violin_subchunk", 
+make_subchunk(g_grid, subchunk_name = "scrna_sample_umi_violin_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)
@@ -551,7 +551,7 @@ g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 6)
 
 temp_figwidth <- 15
 temp_figheight <- ceiling(n_samples/6)*4 + 0.4
-batchreporter::make_subchunk(g_grid, subchunk_name = "umis_well_hto_subchunk", 
+make_subchunk(g_grid, subchunk_name = "umis_well_hto_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 ```
@@ -593,7 +593,7 @@ g_grid <- plot_grid(plotlist = genes_violin_list,
 temp_figwidth = 3 + n_samples*0.4
 temp_figheight = 4
 
-batchreporter::make_subchunk(g_grid, subchunk_name = "scrna_sample_genes_violin_subchunk", 
+make_subchunk(g_grid, subchunk_name = "scrna_sample_genes_violin_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, 
                                     warning = FALSE), 
               quiet_knit = TRUE)
@@ -633,7 +633,7 @@ g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 6)
 
 temp_figwidth <- 15
 temp_figheight <- ceiling(n_samples/6)*4 + 0.4
-batchreporter::make_subchunk(g_grid, subchunk_name = "genes_well_hto_subchunk", 
+make_subchunk(g_grid, subchunk_name = "genes_well_hto_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 ```
@@ -733,7 +733,7 @@ g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 1)
 
 temp_figwidth <- 15
 temp_figheight <- n_samples*4 + 0.4
-batchreporter::make_subchunk(g_grid, subchunk_name = "fctmito_umiscatter_well_hto_subchunk", 
+make_subchunk(g_grid, subchunk_name = "fctmito_umiscatter_well_hto_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
@@ -804,7 +804,7 @@ g_grid <- cowplot::plot_grid(plotlist = plot_list, align = "tblr", ncol = 1)
 
 temp_figwidth <- 15
 temp_figheight <- n_samples*4 + 0.4
-batchreporter::make_subchunk(g_grid, subchunk_name = "fctmito_genescatter_well_hto_subchunk", 
+make_subchunk(g_grid, subchunk_name = "fctmito_genescatter_well_hto_subchunk", 
               chunk_opt_list = list(fig.height = temp_figheight, fig.width = temp_figwidth, warning = FALSE), 
               quiet_knit = TRUE)
 
