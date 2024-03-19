@@ -4,6 +4,7 @@
 orig_workspace <- ls() 
 
 scrna_seq_sample_module_version <- "1.0.2" #20240227
+source('/batchreporter/R/custom_functions.R')
 ```
 
 The following metrics summarize the sequencing and alignment by Sample ID after hto-parsing and filtering for singlet cells.  

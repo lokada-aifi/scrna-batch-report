@@ -27,6 +27,7 @@ quiet_library(viridis)
 quiet_library(dplyr)
 quiet_library(plyr)
 quiet_library(data.table)
+source('/batchreporter/R/custom_functions.R')
 ```
 
 ##### Locate input files

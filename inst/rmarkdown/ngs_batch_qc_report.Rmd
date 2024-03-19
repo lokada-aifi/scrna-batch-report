@@ -53,6 +53,7 @@ quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
 quiet_library(Seurat)
 quiet_library(assertthat)
+source('/batchreporter/R/custom_functions.R')
 
 stm("Starting NGS Batch Report")
 

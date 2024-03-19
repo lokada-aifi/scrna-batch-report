@@ -55,6 +55,7 @@ quiet_library(cowplot)
 quiet_library(jsonlite)
 quiet_library(purrr)
 options(stringsAsFactors = FALSE)
+source('/batchreporter/R/custom_functions.R')
 ```
 
 Declaring start

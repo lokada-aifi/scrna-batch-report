@@ -4,7 +4,7 @@
 
 ```{r}
 scrna_seq_module_version <- "1.0.1" # 20211006 extend for ARC metadata columns
-
+source('/batchreporter/R/custom_functions.R')
 ```
 
 The following metrics summarize the sequencing and alignment by 10x well prior to un-hashing and hash-based cell filtering.  

@@ -4,7 +4,7 @@
 
 ```{r}
 scrna_hashing_module_version <- "1.0.1"  # 20211006--update to handle missing expected hto
-
+source('/batchreporter/R/custom_functions.R')
 ```
 
 <!-- # ```{r test, include = FALSE} -->

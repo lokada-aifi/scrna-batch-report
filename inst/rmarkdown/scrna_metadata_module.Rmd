@@ -3,6 +3,8 @@
 <!-- Parent document must have a variable "rna_in_dir" containing a subfolder "labeled_h5" -->
 
 ```{r scrna_label_dependency_check, include = FALSE}
+source('/batchreporter/R/custom_functions.R')
+
 assertthat::assert_that(exists("rna_in_dir"))
 assertthat::assert_that(length(dir(file.path(rna_in_dir,"multiplet_h5")))>0)
 sample_column_name

@@ -52,7 +52,7 @@ quiet_library(tidyr)         # data wrangling
 quiet_library(Seurat)        # batch umap creation
 quiet_library(future)        # multi-threading for batch umap creation
 quiet_library(future.apply)  # multi-threading for batch umap creation
-
+source('/batchreporter/R/custom_functions.R')
 stm(paste(c("\t",paste(names(Sys.info()),Sys.info(),sep = ": ")), collapse = "\n\t"))
 ```  
 
