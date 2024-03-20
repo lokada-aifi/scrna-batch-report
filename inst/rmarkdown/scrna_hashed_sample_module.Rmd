@@ -1021,8 +1021,8 @@ cowplot::plot_grid(aligned_plots[[1]],
 <a id="biological_sex_verification_plots"></a>  
 
 ### Biological Sex Verification Plots
-#### Gene selected to identify Female samples - XIST : ENSG00000129824
-#### Gene selected to identify Male samples   - RPS4Y1 : ENSG00000229807
+#### Gene selected to identify Female samples - XIST : ENSG00000229807 
+#### Gene selected to identify Male samples   - RPS4Y1 : ENSG00000129824
 
 ```{r sex verification plots function definitions}
 make_dotplot <- function(summary_df, exp = 'avg.exp.scaled'){
@@ -1089,8 +1089,8 @@ female_gene <- 'XIST'
 male_gene <- 'RPS4Y1'
 
 if(grepl('ENSG', gene_ids, fixed = TRUE)) { 
-    female_gene <- 'ENSG00000129824'
-    male_gene <- 'ENSG00000229807'
+    female_gene <- 'ENSG00000229807'
+    male_gene <- 'ENSG00000129824'
 }
 
 keep_genes <- c(male_gene, female_gene)
