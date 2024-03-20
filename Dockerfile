@@ -72,6 +72,7 @@ RUN R -e 'remotes::install_version("Matrix", version = "1.6.5")'
 RUN R -e 'remotes::install_version("SeuratObject", version = "4.1.3")'
 RUN R -e 'remotes::install_version("Seurat", version = "4.3.0.1")'
 RUN R -e 'remotes::install_version("gt", version = "0.3.1")'
+RUN R -e 'remotes::install_version("scattermore", version = "0.7")'
 
 # Install AIFI Github packages
 COPY auth_token4 /tmp/auth_token
