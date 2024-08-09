@@ -52,9 +52,8 @@ install.packages("rmarkdown")
 install.packages("optparse")
 ```
 
-`H5weaver`, `HTOparser`, and `ATAComb` are internally developed packages found in the aifimmunology Github repositories. Because it is a private repository, you may need to provided a [Github Personal Access Token](https://github.com/settings/tokens) for installation:
+`H5weaver`, `HTOparser`, and `ATAComb` are internally developed packages found in the aifimmunology Github repositories.
 ```
-Sys.setenv(GITHUB_PAT = "[your_PAT_here]")
 devtools::install_github("aifimmunology/H5weaver")
 devtools::install_github("aifimmunology/HTOparser")
 devtools::install_github("aifimmunology/ATAComb")
