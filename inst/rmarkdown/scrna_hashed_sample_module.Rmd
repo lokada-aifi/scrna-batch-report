@@ -1144,9 +1144,8 @@ print(p1)
 
 ```{r sex_verification_box_plots, results="asis", fig.width=18}
 
-boxplots = list(p2,p3)
-
 if(sample_sex) {
+    boxplots = list(p2,p3)
     stm("Plotting Sex Verification Box Plots")
     htmltools::tagList(boxplots)
 }
